@@ -1,0 +1,9 @@
+/out/
+/extracted_images/
+__pycache__
+tz.md
+*.zip
+*png
+.vscode/
+crewell.ipynb
+
