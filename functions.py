@@ -232,15 +232,129 @@ def parse_notes(soup):
                         else:
                             return None
 
+
+# ОБРАБОТКА ДАННЫХ
+
+# вернуть только буквы
+def only_letters_regex(text):
+    result = re.sub(r'[^а-яА-ЯёЁa-zA-Z]', '', text) if text else None
+    return result if result else None
+
+# Разделить ФИО
+def get_names(names_string):
+    # предполагаем что первым идет имя
+    name = only_letters_regex(names_string.split(' ')[0])
+    # все что в середине здесь
+    middle_name = only_letters_regex(names_string.split(' ',1)[1].rsplit(' ',1)[0] if len(names_string.split(' ')) > 2 else None)
+    # фамилия в конце
+    surname = only_letters_regex(names_string.split(' ')[-1]) 
+    return name, middle_name, surname 
     
-     
+
+# Дата рождения и место рождения
+def get_birth_day_place(birth_day_place_string):
+    if len(birth_day_place_string.split(' ',1))==2:
+        day, place = birth_day_place_string.split(' ',1)
+    return day, place
+
+# очередна очистка текста
+def clean_letters_commas(text):    
+    """
+    Оставляет только буквы и запятые:
+    - Удаляет пробелы после букв и перед запятыми
+    - После запятых оставляет 1 пробел
+    """
+    # Проверка на пустую строку
+    if not text:                   
+        return None                 
     
+    # Этап 1: Оставляем ТОЛЬКО буквы, запятые и пробелы
+    text = re.sub(r'[^а-яА-ЯёЁa-zA-Z,\s]', '', text)
+         
+    # Этап 2: Удаляем пробелы перед запятыми (, )
+    text = re.sub(r'\s+,', ',', text)
+        
+    # Этап 3: Удаляем пробелы после букв перед запятыми (буква ,)
+    text = re.sub(r'([а-яА-ЯёЁa-zA-Z]),', r'\1,', text)
+      
+    # Этап 4: После запятых → 1 пробел (если нет пробела)
+    text = re.sub(r',([^ ])', r', \1', text)
+                                   
+    # Этап 5: Удаляем множественные пробелы
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Этап 6: Удаляем пробелы в начале/конце
+    result = text.strip()
+    
+    return result if result else None 
 
 
 
 
+def extract_date_to_iso(text):     # Главная функция: извлечь дату и вернуть ISO
+    """
+    Ищет дату в строке, конвертирует в ISO (YYYY-MM-DD), возвращает кортеж:
+    (iso_date или None, остальная_строка_без_даты)
+    """
+    if not text:                   # Проверяем на пустую строку
+        return None         # Возвращаем None 
+    
+    cleaned = text.strip()         # Удаляем пробелы по краям
+    
+    # Паттерн для дат: DD.MM.YYYY, DD/MM/YYYY, DD-MM-YYYY
+    date_pattern = r'\b(\d{1,2})[./-](\d{1,2})[./-](\d{4})\b'
+                                   # \b - граница слова
+                                   # (\d{1,2}) - день (группа 1)
+                                   # [./-] - разделитель
+                                   # (\d{1,2}) - месяц (группа 2)
+                                   # (\d{4}) - год (группа 3)
+    
+    match = re.search(date_pattern, cleaned)  
+                                   # Ищем первую дату в строке
+    
+    if not match:                  # Если дата не найдена
+        return None, clean_letters_commas(cleaned)       # Возвращаем None и всю строку
+    
+    day, month, year = match.groups()  
+                                   # Извлекаем день, месяц, год из групп
+    
+    try:                           # Пробуем создать дату
+        # Парсим дату в формате DD.MM.YYYY
+        date_obj = datetime(int(year), int(month), int(day))
+                                   # int() преобразует строки в числа
+                                   # datetime проверяет корректность (29.02 в невисокосный)
+        
+        iso_date = date_obj.strftime('%Y-%m-%d')  
+                                   # Конвертируем в ISO: YYYY-MM-DD
+        
+        # Удаляем найденную дату из строки
+        start, end = match.span()  # Получаем позиции даты в строке
+        remaining_text = cleaned[:start].strip() + ' ' + cleaned[end:].strip()
+                                   # Обрезаем дату, склеиваем остаток
+        remaining_text = ' '.join(remaining_text.split())  
+                                   # Нормализуем множественные пробелы
+        
+        return iso_date, remaining_text
 
 
 
+                                   # Возвращаем ISO дату и остаток текста
+    
+    except ValueError:             # Если дата невалидна (32.13.2025)
+        return None      # Возвращаем None и исходную строку
+
+# поиск всех емейлов
+def find_emails(text):
+    pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+    return re.findall(pattern, text)
+
+def get_emails_list(email_string):
+    emails_list = []
+    if find_emails(email_string):
+        for email in find_emails(email_string):
+            emails_list.append({"email":email, "comment":"comment", "uuid":None})
+    else:
+        return None
+    return emails_list
 
 
