@@ -49,6 +49,37 @@ def get_dict(key):
     data = response.json()
     return data
 
+def get_dicts_list(is_static=False):
+    
+    session = requests.Session()
+    login_url = 'https://staffdev.360crewing.com/api/v1/auth/login'  
+    login_data = {
+        "email":"owner@staffdev.com",
+        "password":"m6fDG4UeMT0q",
+        "forced":True
+    }
+
+    headers = {
+        'Content-Type':'application/json'
+    }
+
+    # Токен
+    login_response = session.post(login_url, json=login_data, headers=headers)
+    login_response.raise_for_status()
+    token = login_response.json().get('access_token')
+    
+    url = f'https://staffdev.360crewing.com/api/v1/admin/dicts?is_static={is_static}'
+    # url = domain + is_static
+    
+
+    headers = {'Content-Type': 'application/json',
+               'Authorization': f'Bearer {token}'}
+
+    response = session.get(url, headers=headers)
+    response.raise_for_status()
+    data = response.json()
+    return data
+
 # СТАРАЯ
 def get_id_raw(dictionary,key):
     id = next((item['id'] for item in dictionary if item['value'].lower() == key.lower()), None)
@@ -365,5 +396,15 @@ def get_emails_list(email_string):
     else:
         return None
     return emails_list
+
+
+
+def only_letters_digits_spaces(text):
+    """Проверяет: только буквы, цифры, пробелы"""
+    if not text:                   # Пустая строка → False
+        return False
+    # ^ начало, $ конец, [] любой из символов
+    pattern = r'^[а-яА-ЯёЁa-zA-Z0-9\s]+$'
+    return bool(re.match(pattern, text.strip()))
 
 
