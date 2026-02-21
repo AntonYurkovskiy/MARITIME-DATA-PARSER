@@ -51,7 +51,7 @@ def get_dict(key):
 
 # СТАРАЯ
 def get_id_raw(dictionary,key):
-    id = next((item['id'] for item in dictionary if item['value'] == key), None)
+    id = next((item['id'] for item in dictionary if item['value'].lower() == key.lower()), None)
     return id
 
 # НОВАЯ
@@ -349,6 +349,15 @@ def find_emails(text):
     return re.findall(pattern, text)
 
 def get_emails_list(email_string):
+    """Из строки с емейлами делает словарь по форме 
+    {"email":"email", "comment":"comment", "uuid":"uuid"}
+
+    Args:
+        email_string (str): строка в которую должен входить email
+
+    Returns:
+        _type_: _description_
+    """
     emails_list = []
     if find_emails(email_string):
         for email in find_emails(email_string):
