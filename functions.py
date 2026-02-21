@@ -228,7 +228,7 @@ def parse_notes(soup):
                     if row.get_text(strip=True) =='Notes':
                         if row_idx + 1 < len(rows):
                             value_row = rows[row_idx + 1]
-                            return value_row.get_text(strip=True)
+                            return value_row.get_text(strip=True).replace('\n', ' ')
                         else:
                             return None
 
