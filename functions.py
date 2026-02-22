@@ -87,7 +87,7 @@ def get_id_raw(dictionary,key):
 
 # НОВАЯ
 def get_id(dictionary, key):
-    id = next((item['id'] for item in dictionary if item['value'] == key), None)
+    id = next((item['id'] for item in dictionary if item['value'].lower() == key.lower()), None)
     if id:
         return id
     
@@ -419,10 +419,77 @@ def get_personal_id_by_passport(pasports_list_of_dicts):
     return None, 'No documents'
 
 def get_rank(ranks):
+    
+    ranks_splited = []    
+    
     if len(ranks) > 1:
-        rank = ranks[0]
-        aditional_ranks = ranks[1:]
+        for rank in ranks:
+            if '/' in rank:
+                for splited_rank in rank.split('/'):
+                    ranks_splited.append(splited_rank)
+                return ranks_splited[0], ranks_splited[1:]
+            else:
+                return ranks[0], ranks[1:]
+           
     else:
-        rank = ranks[0]
-        aditional_ranks = None
-    return rank, aditional_ranks
+        return ranks[0], None
+    
+def get_ranks(ranks):
+    """Разбивает все ранги по '/' в плоский список"""
+    all_ranks = [part.strip() for rank in ranks for part in rank.split('/')]
+    return all_ranks
+
+# def get_additional_id(dictionary,additional_ranks):
+    
+#     if not additional_ranks:
+#         result = None
+#     else:
+#         if len(additional_ranks)==1:
+#             result = get_id_raw(dictionary,additional_ranks[0])
+#         else:
+#             result =[]
+#             for ad_rank in additional_ranks:
+#                 result.append(get_id_raw(dictionary,ad_rank))
+                
+#     return result
+
+# def short_get_additional_id(additional_ranks, dictionary='rank'):
+#     if not additional_ranks: return None
+#     return [get_id_raw(dictionary, rank) for rank in additional_ranks]
+
+
+
+def add_value_in_dict(value,dict_name):
+     
+    session = requests.Session()
+    login_url = 'https://staffdev.360crewing.com/api/v1/auth/login'  
+    login_data = {
+        "email":"owner@staffdev.com",
+        "password":"m6fDG4UeMT0q",
+        "forced":True
+    }
+
+    headers = {
+        'Content-Type':'application/json'
+    }
+
+    # Токен
+    login_response = session.post(login_url, json=login_data, headers=headers)
+    login_response.raise_for_status()
+    token = login_response.json().get('access_token')
+    
+    domain = f'https://staffdev.360crewing.com/admin/dicts/{dict_name}'    
+    # domain = 'https://staffdev.360crewing.com/api/v1/dict/'
+    # url = domain + key
+    
+
+    headers = {'Content-Type': 'application/json',
+               'Authorization': f'Bearer {token}',
+               'Accept': 'application/json',
+               'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 YaBrowser/24.1.3.XX.00 SA/3 Safari/537.36'}
+    
+
+    response = session.post(domain, headers=headers, data={"value": value})
+    response.raise_for_status()
+    data = response.json()
+    return data
