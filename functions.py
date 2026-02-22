@@ -417,3 +417,12 @@ def get_personal_id_by_passport(pasports_list_of_dicts):
                 return doc['No.'] if only_letters_digits_spaces(doc['No.']) else None, doc_type
     
     return None, 'No documents'
+
+def get_rank(ranks):
+    if len(ranks) > 1:
+        rank = ranks[0]
+        aditional_ranks = ranks[1:]
+    else:
+        rank = ranks[0]
+        aditional_ranks = None
+    return rank, aditional_ranks
