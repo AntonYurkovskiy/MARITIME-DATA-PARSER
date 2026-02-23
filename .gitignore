@@ -1,3 +1,6 @@
+# Секреты
+.env
+
 /out/
 /extracted_images/
 __pycache__

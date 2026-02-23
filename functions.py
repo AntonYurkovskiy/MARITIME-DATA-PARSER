@@ -17,14 +17,23 @@ import shutil
 import base64
 import re
 
+
+from dotenv import load_dotenv
+
+
+# Доступ:
+load_dotenv()
+email = os.getenv("CREWING_EMAIL")
+password = os.getenv("CREWING_PASSWORD")
+
 # ПОЛУЧЕНИЕ СЛОВАРЯ ПО КЛЮЧУ
 def get_dict(key):
      
     session = requests.Session()
     login_url = 'https://staffdev.360crewing.com/api/v1/auth/login'  
     login_data = {
-        "email":"owner@staffdev.com",
-        "password":"m6fDG4UeMT0q",
+        "email":email,
+        "password":password,
         "forced":True
     }
 
@@ -54,8 +63,8 @@ def get_dicts_list(is_static=False):
     session = requests.Session()
     login_url = 'https://staffdev.360crewing.com/api/v1/auth/login'  
     login_data = {
-        "email":"owner@staffdev.com",
-        "password":"m6fDG4UeMT0q",
+        "email":email,
+        "password":password,
         "forced":True
     }
 
@@ -459,13 +468,13 @@ def get_ranks(ranks):
 
 
 
-def add_value_in_dict(value,dict_name):
+def add_value_in_dict(value, dict_name):
      
     session = requests.Session()
     login_url = 'https://staffdev.360crewing.com/api/v1/auth/login'  
     login_data = {
-        "email":"owner@staffdev.com",
-        "password":"m6fDG4UeMT0q",
+        "email":email,
+        "password":password,
         "forced":True
     }
 
@@ -478,9 +487,9 @@ def add_value_in_dict(value,dict_name):
     login_response.raise_for_status()
     token = login_response.json().get('access_token')
     
-    domain = f'https://staffdev.360crewing.com/admin/dicts/{dict_name}'    
-    # domain = 'https://staffdev.360crewing.com/api/v1/dict/'
-    # url = domain + key
+    # domain = f'https://staffdev.360crewing.com/admin/dicts/'    
+    domain = 'https://staffdev.360crewing.com/api/v1/dict/'
+    url = domain + dict_name
     
 
     headers = {'Content-Type': 'application/json',
@@ -489,7 +498,7 @@ def add_value_in_dict(value,dict_name):
                'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 YaBrowser/24.1.3.XX.00 SA/3 Safari/537.36'}
     
 
-    response = session.post(domain, headers=headers, data={"value": value})
+    response = session.post(url, headers=headers, json={"value": value})
     response.raise_for_status()
     data = response.json()
     return data
