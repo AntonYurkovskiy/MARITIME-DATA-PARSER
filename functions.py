@@ -17,96 +17,81 @@ import shutil
 import base64
 import re
 
-
+from functools import lru_cache
 from dotenv import load_dotenv
 
-
-# Доступ:
 load_dotenv()
-email = os.getenv("CREWING_EMAIL")
-password = os.getenv("CREWING_PASSWORD")
+
+@lru_cache(maxsize=1)  # Кэшируем авторизацию
+def _get_session():
+    """Единая авторизация для всех запросов"""
+    session = requests.Session()
+    
+    login_data = {
+        "email": os.getenv("CREWING_EMAIL"),
+        "password": os.getenv("CREWING_PASSWORD"),
+        "forced": True
+    }
+    
+    headers = {'Content-Type': 'application/json'}
+    login_response = session.post(
+        'https://staffdev.360crewing.com/api/v1/auth/login', 
+        json=login_data, 
+        headers=headers
+    )
+    login_response.raise_for_status()
+    
+    # Настраиваем заголовки сессии
+    session.headers.update({
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {login_response.json().get("access_token")}',
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 YaBrowser/24.1.3.88.00 SA/3 Safari/537.36'
+    })
+    
+    return session
+
+def add_value_in_dict(value: str, dict_name: str) -> dict:
+    """Добавляет значение в словарь 360Crew API"""
+    session = _get_session()  # Кэшированная сессия
+    url = f'https://staffdev.360crewing.com/api/v1/admin/dicts/{dict_name}'
+    
+    response = session.post(url, json={"value": value})
+    response.raise_for_status()
+    return response.json()
 
 # ПОЛУЧЕНИЕ СЛОВАРЯ ПО КЛЮЧУ
+
+@lru_cache(maxsize=128) 
 def get_dict(key):
      
-    session = requests.Session()
-    login_url = 'https://staffdev.360crewing.com/api/v1/auth/login'  
-    login_data = {
-        "email":email,
-        "password":password,
-        "forced":True
-    }
-
-    headers = {
-        'Content-Type':'application/json'
-    }
-
-    # Токен
-    login_response = session.post(login_url, json=login_data, headers=headers)
-    login_response.raise_for_status()
-    token = login_response.json().get('access_token')
+    session = _get_session()  # Кэшированная сессия
         
     domain = 'https://staffdev.360crewing.com/api/v1/dict/'
     url = domain + key
-    
 
-    headers = {'Content-Type': 'application/json',
-               'Authorization': f'Bearer {token}'}
-
-    response = session.get(url, headers=headers)
+    response = session.get(url)
     response.raise_for_status()
     data = response.json()
     return data
 
+# ПОЛУЧЕНИЕ ВСЕХ СЛОВАРЕЙ
 def get_dicts_list(is_static=False):
     
-    session = requests.Session()
-    login_url = 'https://staffdev.360crewing.com/api/v1/auth/login'  
-    login_data = {
-        "email":email,
-        "password":password,
-        "forced":True
-    }
-
-    headers = {
-        'Content-Type':'application/json'
-    }
-
-    # Токен
-    login_response = session.post(login_url, json=login_data, headers=headers)
-    login_response.raise_for_status()
-    token = login_response.json().get('access_token')
+    session = _get_session() 
     
     url = f'https://staffdev.360crewing.com/api/v1/admin/dicts?is_static={is_static}'
-    # url = domain + is_static
     
-
-    headers = {'Content-Type': 'application/json',
-               'Authorization': f'Bearer {token}'}
-
-    response = session.get(url, headers=headers)
+    response = session.get(url)
     response.raise_for_status()
     data = response.json()
     return data
 
-# СТАРАЯ
-def get_id_raw(dictionary,key):
+# получение ID
+def get_id(dictionary,key):
     id = next((item['id'] for item in dictionary if item['value'].lower() == key.lower()), None)
-    return id
-
-# НОВАЯ
-def get_id(dictionary, key):
-    id = next((item['id'] for item in dictionary if item['value'].lower() == key.lower()), None)
-    if id:
-        return id
+    return id if id else add_value_in_dict(key,dictionary)['inserted']['id']
     
-    # Добавляем новый
-    # БЕЗ ОБРАЩЕНИЯ НА СЕРВЕР
-    else:
-            
-        new_id = max((item['id'] for item in dictionary), default=0) + 1
-        dictionary.append({'department': None, 'id': new_id, 'order': new_id, 'type': None, 'value': key})
-        return new_id
 
 # ИСПОЛЬЗОВАТЬ
 def get_html_content(file_path):
@@ -328,9 +313,6 @@ def clean_letters_commas(text):
     
     return result if result else None 
 
-
-
-
 def extract_date_to_iso(text):     # Главная функция: извлечь дату и вернуть ISO
     """
     Ищет дату в строке, конвертирует в ISO (YYYY-MM-DD), возвращает кортеж:
@@ -426,79 +408,13 @@ def get_personal_id_by_passport(pasports_list_of_dicts):
                 return doc['No.'] if only_letters_digits_spaces(doc['No.']) else None, doc_type
     
     return None, 'No documents'
-
-def get_rank(ranks):
-    
-    ranks_splited = []    
-    
-    if len(ranks) > 1:
-        for rank in ranks:
-            if '/' in rank:
-                for splited_rank in rank.split('/'):
-                    ranks_splited.append(splited_rank)
-                return ranks_splited[0], ranks_splited[1:]
-            else:
-                return ranks[0], ranks[1:]
-           
-    else:
-        return ranks[0], None
-    
+   
 def get_ranks(ranks):
     """Разбивает все ранги по '/' в плоский список"""
     all_ranks = [part.strip() for rank in ranks for part in rank.split('/')]
     return all_ranks
 
-# def get_additional_id(dictionary,additional_ranks):
-    
-#     if not additional_ranks:
-#         result = None
-#     else:
-#         if len(additional_ranks)==1:
-#             result = get_id_raw(dictionary,additional_ranks[0])
-#         else:
-#             result =[]
-#             for ad_rank in additional_ranks:
-#                 result.append(get_id_raw(dictionary,ad_rank))
-                
-#     return result
-
-# def short_get_additional_id(additional_ranks, dictionary='rank'):
-#     if not additional_ranks: return None
-#     return [get_id_raw(dictionary, rank) for rank in additional_ranks]
 
 
 
-def add_value_in_dict(value, dict_name):
-     
-    session = requests.Session()
-    login_url = 'https://staffdev.360crewing.com/api/v1/auth/login'  
-    login_data = {
-        "email":email,
-        "password":password,
-        "forced":True
-    }
 
-    headers = {
-        'Content-Type':'application/json'
-    }
-
-    # Токен
-    login_response = session.post(login_url, json=login_data, headers=headers)
-    login_response.raise_for_status()
-    token = login_response.json().get('access_token')
-    
-    # domain = f'https://staffdev.360crewing.com/admin/dicts/'    
-    domain = 'https://staffdev.360crewing.com/api/v1/dict/'
-    url = domain + dict_name
-    
-
-    headers = {'Content-Type': 'application/json',
-               'Authorization': f'Bearer {token}',
-               'Accept': 'application/json',
-               'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 YaBrowser/24.1.3.XX.00 SA/3 Safari/537.36'}
-    
-
-    response = session.post(url, headers=headers, json={"value": value})
-    response.raise_for_status()
-    data = response.json()
-    return data
