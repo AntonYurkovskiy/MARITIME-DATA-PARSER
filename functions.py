@@ -20,12 +20,25 @@ import re
 from functools import lru_cache
 from dotenv import load_dotenv
 
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
 load_dotenv()
 
-@lru_cache(maxsize=1)  # Кэшируем авторизацию
+# @lru_cache(maxsize=1)  
 def _get_session():
     """Единая авторизация для всех запросов"""
     session = requests.Session()
+    
+    # ✅ Retry стратегия: 3 попытки с backoff
+    retry_strategy = Retry(
+        total=10,
+        backoff_factor=1,  # 1s, 2s, 4s задержки
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
     
     login_data = {
         "email": os.getenv("CREWING_EMAIL"),
@@ -34,22 +47,42 @@ def _get_session():
     }
     
     headers = {'Content-Type': 'application/json'}
-    login_response = session.post(
-        'https://staffdev.360crewing.com/api/v1/auth/login', 
-        json=login_data, 
-        headers=headers
-    )
-    login_response.raise_for_status()
     
-    # Настраиваем заголовки сессии
+    # ✅ КРИТИЧНО: timeout + обработка ошибок!
+    try:
+        login_response = session.post(
+            'https://staffdev.360crewing.com/api/v1/auth/login', 
+            json=login_data, 
+            headers=headers,
+            timeout=(30, 60)  # 10s коннект, 30s ответ
+        )
+        login_response.raise_for_status()
+    except requests.exceptions.Timeout:
+        print("⏰ TIMEOUT: staffdev.360crewing.com не отвечает!")
+        print("🔍 Проверьте: интернет, VPN, firewall")
+        raise
+    except requests.exceptions.ConnectionError as e:
+        print(f"🌐 ConnectionError: {e}")
+        raise
+    except Exception as e:
+        print(f"❌ Login failed: {e}")
+        raise
+    
+    # ✅ Заголовки сессии
+    token = login_response.json().get("access_token")
+    if not token:
+        raise ValueError("Нет access_token в ответе!")
+        
     session.headers.update({
         'Content-Type': 'application/json',
-        'Authorization': f'Bearer {login_response.json().get("access_token")}',
+        'Authorization': f'Bearer {token}',
         'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 YaBrowser/24.1.3.88.00 SA/3 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     })
     
+    # print("✅ Авторизация успешна!")
     return session
+
 
 def add_value_in_dict(value: str, dict_name: str) -> dict:
     """Добавляет значение в словарь 360Crew API"""
@@ -63,17 +96,20 @@ def add_value_in_dict(value: str, dict_name: str) -> dict:
 # ПОЛУЧЕНИЕ СЛОВАРЯ ПО КЛЮЧУ
 
 @lru_cache(maxsize=128) 
+
 def get_dict(key):
-     
     session = _get_session()  # Кэшированная сессия
-        
     domain = 'https://staffdev.360crewing.com/api/v1/dict/'
     url = domain + key
+    
+    try:
+        response = session.get(url, timeout=(10, 30))
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"❌ Ошибка получения {key}: {e}")
+        raise
 
-    response = session.get(url)
-    response.raise_for_status()
-    data = response.json()
-    return data
 
 # ПОЛУЧЕНИЕ ВСЕХ СЛОВАРЕЙ
 def get_dicts_list(is_static=False):
@@ -86,6 +122,28 @@ def get_dicts_list(is_static=False):
     response.raise_for_status()
     data = response.json()
     return data
+
+def search_geo(search_term: str, geo_type: str = "countries") -> list:
+    """Поиск в geo словарях"""
+    session = _get_session()
+    
+    base_url = 'https://staffdev.360crewing.com/api/v1/dict'
+    if geo_type in ['countries','cities','regions']:
+        url = f'{base_url}/geo/{geo_type}/search/{search_term}'
+    else:
+        url = f'{base_url}/{geo_type}/search/{search_term}'
+    
+    # print(f"🔍 GET {url}")
+    response = session.get(url)  
+    
+    # print(f"Status: {response.status_code}")
+    if response.status_code == 200:
+        data = response.json()
+        # print(f"✅ Найдено: {len(data)} записей")
+        return data
+    else:
+        print(f"❌ {response.text}")
+        return []
 
 # получение ID
 def get_id(dictionary,key):
