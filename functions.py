@@ -23,6 +23,8 @@ from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from typing import Optional
+
 load_dotenv()
 
 # @lru_cache(maxsize=1)  
@@ -84,7 +86,7 @@ def _get_session():
     return session
 
 
-def add_value_in_dict(value: str, dict_name: str) -> dict:
+def _add_value_in_dict(value: str, dict_name: str) -> dict:
     """Добавляет значение в словарь 360Crew API"""
     session = _get_session()  # Кэшированная сессия
     url = f'https://staffdev.360crewing.com/api/v1/admin/dicts/{dict_name}'
@@ -95,8 +97,7 @@ def add_value_in_dict(value: str, dict_name: str) -> dict:
 
 # ПОЛУЧЕНИЕ СЛОВАРЯ ПО КЛЮЧУ
 
-@lru_cache(maxsize=128) 
-
+# @lru_cache(maxsize=128) 
 def get_dict(key):
     session = _get_session()  # Кэшированная сессия
     domain = 'https://staffdev.360crewing.com/api/v1/dict/'
@@ -146,10 +147,66 @@ def search_geo(search_term: str, geo_type: str = "countries") -> list:
         return []
 
 # получение ID
-def get_id(dictionary,key):
-    id = next((item['id'] for item in dictionary if item['value'].lower() == key.lower()), None)
-    return id if id else add_value_in_dict(key,dictionary)['inserted']['id']
+# def get_id(dictionary,key):
+#     id = next((item['id'] for item in dictionary if item['value'].lower() == key.lower()), None)
+#     return id if id else _add_value_in_dict(key,dictionary)['inserted']['id']
+
+
+def get_id(dictionary, value, dict_name: str):
+    if value:
+        found_id = next(
+            (item['id'] for item in dictionary if item['value'].lower() == value.lower()),
+            None
+        )
+        if found_id is not None:
+            return found_id
+        # dict_name — строка, например "languages"
+        return _add_value_in_dict(value, dict_name)['inserted']['id']
+    else:
+        return None
+
+# def get_id__(dictionary: list[dict], key: str, dict_name: str):
+#     found_id = next(
+#         (item["id"] for item in dictionary
+#          if isinstance(item.get("value"), str)
+#          and item["value"].lower() == key.lower()),
+#         None
+#     )
+#     if found_id is not None:
+#         return found_id
+
+#     # если не нашли — добавляем в конкретный словарь по имени
+#     created = _add_value_in_dict(key, dict_name)
+#     # подстрой под реальную структуру ответа
+#     return created.get("inserted", {}).get("id") or created.get("id")
     
+
+
+def clean_languages(languages_list: list[dict]) -> list[dict]:
+    """Очищает пустые + удаляет через API"""
+    session = _get_session()
+    
+    # 1. Собираем ID пустых для удаления
+    empty_ids = [
+        item['id'] for item in languages_list 
+        if not item.get('value', '').strip()
+        and item.get('value', '').lower() != 'portuguesse'
+    ]
+    
+    # 2. Удаляем через API (если нужно)
+    for empty_id in empty_ids:
+        delete_url = f'https://staffdev.360crewing.com/api/v1/admin/dicts/languages/{empty_id}'
+        try:
+            session.delete(delete_url)
+            print(f"🗑️ Удалён ID: {empty_id}")
+        except:
+            pass  # если не удалилось - просто пропустим
+    
+    # 3. Фильтруем локально
+    return [
+        item for item in languages_list 
+        if item.get('value', '').strip()
+    ]
 
 # ИСПОЛЬЗОВАТЬ
 def get_html_content(file_path):
@@ -473,6 +530,117 @@ def get_ranks(ranks):
     return all_ranks
 
 
+def get_languages(languages):
+    lang_list = re.split(r', |/', languages)
+    return [part.split(' ',1)[0] if ' ' in part else part for part in lang_list]
 
 
+COUNTRY_TO_LANGUAGE = {
+    # Восточная Европа / СНГ
+    "Russia": "Russian",
+    "Russian Federation": "Russian", 
+    "Ukraine": "Ukrainian",
+    "Belarus": "Belarusian",
+    "Kazakhstan": "Kazakh",
+    "Uzbekistan": "Uzbek",
+    "Kyrgyzstan": "Kyrgyz",
+    "Tajikistan": "Tajik",
+    "Turkmenistan": "Turkmen",
+    "Armenia": "Armenian",
+    "Azerbaijan": "Azerbaijani",
+    "Georgia": "Georgian",
+    
+    # Западная Европа
+    "Germany": "German",
+    "France": "French", 
+    "Italy": "Italian",
+    "Spain": "Spanish",
+    "Portugal": "Portuguese",
+    "Netherlands": "Dutch",
+    "Belgium": "Dutch",
+    "Austria": "German",
+    "Switzerland": "German",
+    
+    # Восточная Европа
+    "Poland": "Polish",
+    "Czech Republic": "Czech",
+    "Slovakia": "Slovak",
+    "Hungary": "Hungarian",
+    "Romania": "Romanian",
+    "Bulgaria": "Bulgarian",
+    "Serbia": "Serbian",
+    "Croatia": "Croatian",
+    "Bosnia and Herzegovina": "Serbian",
+    "Slovenia": "Slovenian",
+    "North Macedonia": "Macedonian",
+    "Albania": "Albanian",
+    "Montenegro": "Montenegrin",
+    "Moldova": "Romanian",
+    
+    # Прибалтика
+    "Lithuania": "Lithuanian",
+    "Latvia": "Latvian",
+    "Estonia": "Estonian",
+    
+    # Скандинавия
+    "Sweden": "Swedish",
+    "Norway": "Norwegian", 
+    "Denmark": "Danish",
+    "Finland": "Finnish",
+    "Iceland": "Icelandic",
+    
+    # Другие
+    "Greece": "Greek",
+    "Turkey": "Turkish",
+    "Cyprus": "Greek",
+    "Malta": "Maltese",
+    "United Kingdom": "English",
+    "Ireland": "Irish",
+    
+    # Америка
+    "USA": "English",    
+    "United States": "English",
+    "Canada": "English",
+    "Mexico": "Spanish",
+    "Brazil": "Portuguese",
+    "Argentina": "Spanish",
+    "Chile": "Spanish",
+    
+    # Азия
+    "China": "Chinese",
+    "Japan": "Japanese",
+    "South Korea": "Korean",
+    "India": "Hindi",
+    "Indonesia": "Indonesian",
+    "Philippines": "Filipino",
+    "Thailand": "Thai",
+    "Vietnam": "Vietnamese",
+    "Malaysia": "Malay",
+    
+    # Ближний Восток / Африка
+    "Israel": "Hebrew",
+    "Saudi Arabia": "Arabic",
+    "Egypt": "Arabic",
+    "Morocco": "Arabic",
+    "South Africa": "English",
+    "Nigeria": "English",
+}
 
+def country_to_language(country: str) -> Optional[str]:
+    """Страна → язык (case-insensitive)"""
+    if not country:
+        return None
+    
+    normalized = country.strip()
+    
+    # Точное совпадение
+    if normalized in COUNTRY_TO_LANGUAGE:
+        return COUNTRY_TO_LANGUAGE[normalized]
+    
+    # Без регистра
+    normalized_lower = normalized.lower()
+    for country_name, lang in COUNTRY_TO_LANGUAGE.items():
+        if country_name.lower() == normalized_lower:
+            return lang
+    
+    return None
