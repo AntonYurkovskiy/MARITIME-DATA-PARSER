@@ -142,7 +142,7 @@ def search_geo(search_term: str, geo_type: str = "countries") -> list:
             "exact": True  # ← Точное совпадение!
         }
         # print(f"🔍 GET {url}")
-        response = session.get(url, json=payload)  
+        response = session.get(url,json=payload)  
 
         # print(f"Status: {response.status_code}")
         if response.status_code == 200:
@@ -190,6 +190,34 @@ def get_resident_country(search_term: str, citizenship: str):
     else:
         return None
     
+def search_geo_dict(geo_type: str = "countries") -> list:#search_term: str, geo_type: str = "countries") -> list:
+    """Поиск в geo словарях"""
+    if not geo_type:
+        return None
+    else:
+        session = _get_session()
+
+        base_url = 'https://staffdev.360crewing.com/api/v1/dict'
+        if geo_type in ['countries','cities','regions']:
+            url = f'{base_url}/geo/{geo_type}/search/'#{search_term}'
+        else:
+            url = f'{base_url}/{geo_type}/search/'#{search_term}'
+
+        # payload = {
+        #     "term": search_term,
+        #     "exact": True  # ← Точное совпадение!
+        # }
+        # print(f"🔍 GET {url}")
+        response = session.get(url)#, json=payload)  
+
+        # print(f"Status: {response.status_code}")
+        if response.status_code == 200:
+            data = response.json()
+            # print(f"✅ Найдено: {len(data)} записей")
+            return data
+        else:
+            print(f"❌ {response.text}")
+            return []
 # получение ID
 # def get_id(dictionary,key):
 #     id = next((item['id'] for item in dictionary if item['value'].lower() == key.lower()), None)
@@ -547,15 +575,230 @@ def get_emails_list(email_string):
         return None
     return emails_list
 
+# def get_dial_code_and_phone(long_phone_number:str, countries:list):
+#     if not long_phone_number:
+#         return None
+#     else:
+#         for length in range(2,6):
+#             prefix = long_phone_number[:length]
+#             phone_number = long_phone_number[length:]
+#             results = search_geo(prefix, 'countries') or []
+#             for item in results:
+#                 if len(results)==1:
+#                     dial_code = item.get('dial_code')
+#                     # phone_number = long_phone_number[length:]
+#                     country_id = item.get('id')
+#                     return dial_code, phone_number, country_id
+#                 else:
+#                     if item.get('name') in countries:#==country:
+#                         dial_code = item.get('dial_code')
+#                         # phone_number = long_phone_number[length:]
+#                         country_id = item.get('id')
+#                         return dial_code, phone_number, country_id
+
+# def get_phones(phones:str, countries:list)-> list[dict]:
+#     phones_list = []
+#     if not only_digits_spaces_plus_minus(phones):
+#         return None
+#     # 
+#     else:
+#         for phone_number in [x for x in phones.split(' ') if len(x) >= 12]:
+#             if phone_number.startswith('00'):
+#                 phone_number = "+" + phone_number[2:]
+#                 dial_code, ph_number, country_id = get_dial_code_and_phone(phone_number, countries)
+                
+ 
+#             elif phone_number[0].isdigit():
+#                 phone_number = "+" + phone_number
+#                 dial_code, ph_number, country_id = get_dial_code_and_phone(phone_number, countries)
+                
+                
+#             else:
+#                 dial_code, ph_number, country_id = get_dial_code_and_phone(phone_number, countries)
+            
+#             phones_list.append({"uuid":"null", "country_id":country_id, "number":ph_number, "type_id":1, "comment":"comment"})
+            
+#         return  phones_list
+
+# ****************************************
+# def get_dial_code_and_phone(long_phone_number: str, countries: list):
+#     if not long_phone_number:
+#         return None
+
+#     for length in range(2, 6):
+#         prefix = long_phone_number[:length]
+#         results = search_geo(prefix, "countries") or []
+
+#         if len(results) == 1:
+#             item = results[0]
+#         else:
+#             item = next((x for x in results if x.get("name") in countries), None)
+
+#         if item:
+#             return (
+#                 item.get("dial_code"),
+#                 long_phone_number[length:],
+#                 item.get("id"),
+#             )
+
+#     return None
 
 
-def only_letters_digits_spaces(text):
+def normalize_phone(raw: str) -> str:
+    return re.sub(r'\D', '', raw or "")
+
+
+def get_dial_code_and_phone(raw_phone_number: str, countries: list):
+    digits = normalize_phone(raw_phone_number)
+    if not digits:
+        return None
+
+    candidates = [
+        x
+        for n in range(5, 1, -1)
+        for x in (search_geo(digits[:n], "countries") or [])
+        if x.get("name") in countries
+        and digits.startswith(normalize_phone(str(x.get("dial_code", ""))))
+    ]
+
+    if not candidates:
+        return None
+
+    item = candidates[0]
+    dial_code = normalize_phone(str(item.get("dial_code", "")))
+    return item.get("dial_code"), digits[len(dial_code):], item.get("id")
+
+
+def get_phones(phones: str, countries: list) -> list[dict]:
+    if not phones:
+        return []
+
+    phones_list = []
+
+    for raw_phone in phones.split():
+        result = get_dial_code_and_phone(raw_phone, countries)
+        if not result:
+            continue
+
+        dial_code, national_number, country_id = result
+        phones_list.append({
+            "uuid": "null",
+            "country_id": country_id,
+            "number": national_number,
+            "type_id": 1,
+            "comment": "comment",
+        })
+
+    return phones_list
+# ****************************************
+
+import phonenumbers
+
+def normalize_phone(raw: str) -> str:
+    raw = (raw or "").strip()
+    if raw.startswith("00"):
+        raw = "+" + raw[2:]
+    elif raw[:1].isdigit():
+        raw = "+" + raw
+    return re.sub(r"[^\d+]", "", raw)
+
+def resolve_country_by_code(country_code: str, resident_country_id, nationality_country_id, search_geo_func):
+    results = search_geo_func(country_code, "countries") or []
+
+    if len(results) == 1:
+        item = results[0]
+        return {
+            "country_id": item.get("id"),
+            "dial_code": item.get("dial_code"),
+            "is_ambiguous": False,
+            "matches": results,
+        }
+
+    chosen = next(
+        (x for x in results if x.get("id") == resident_country_id),
+        None
+    ) or next(
+        (x for x in results if x.get("id") == nationality_country_id),
+        None
+    ) or (results[0] if results else None)
+
+    if not chosen:
+        return {
+            "country_id": None,
+            "dial_code": None,
+            "is_ambiguous": True,
+            "matches": [],
+        }
+
+    return {
+        "country_id": chosen.get("id"),
+        "dial_code": chosen.get("dial_code"),
+        "is_ambiguous": True,
+        "matches": results,
+    }
+
+def parse_phone(raw_phone: str, resident_country_id, nationality_country_id, search_geo_func):
+    phone = normalize_phone(raw_phone)
+    if not phone:
+        return None
+
+    try:
+        num = phonenumbers.parse(phone, None)
+    except phonenumbers.NumberParseException:
+        return None
+
+    country_code = str(num.country_code)
+    national_number = str(num.national_number)
+
+    country = resolve_country_by_code(
+        country_code,
+        resident_country_id,
+        nationality_country_id,
+        search_geo_func
+    )
+
+    return {
+        "raw_phone": raw_phone,
+        "country_code": country_code,
+        "dial_code": f"+{country_code}",
+        "national_number": national_number,
+        **country,
+    }
+    
+def get_phones(phones: str, resident_country_id, nationality_country_id, search_geo_func) -> list[dict]:
+    items = []
+    for raw_phone in phones.split():
+        row = parse_phone(raw_phone, resident_country_id, nationality_country_id, search_geo_func)
+        if not row or row["country_id"] is None:
+            continue
+
+        items.append({
+            "uuid": "null",
+            "country_id": row["country_id"],
+            "number": row["national_number"],
+            "type_id": 1,
+            "comment": "comment",
+        })
+    return items
+
+# ****************************************
+                   
+            
+def only_letters_digits_spaces(text:str) -> bool:
     """Проверяет: только буквы, цифры, пробелы"""
-    if not text:                   # Пустая строка → False
+    if not text:
         return False
     # ^ начало, $ конец, [] любой из символов
     pattern = r'^[а-яА-ЯёЁa-zA-Z0-9\s]+$'
     return bool(re.match(pattern, text.strip()))
+
+def only_digits_spaces_plus_minus(text):
+    """Проверяет: только цифры, пробелы, плюсы, минусы"""
+    if not text:                   # Пустая строка → False
+        return False
+    # ^ начало, $ конец, [] любой из символов
+    pattern = r'^[0-9+\-\s]+$'
+    return bool(re.match(pattern, text))#.strip()))
 
 
 def get_personal_id_by_passport(pasports_list_of_dicts):
