@@ -1,3 +1,7 @@
+# =========================
+# 0 IMPORTS
+# =========================
+
 # Работа с сервером
 import requests
 from pprint import pprint
@@ -27,6 +31,10 @@ from typing import Optional
 import phonenumbers
 
 load_dotenv()
+
+# =========================
+# 1 REQUESTS
+# =========================
 
 # @lru_cache(maxsize=1)  
 def _get_session():
@@ -136,6 +144,7 @@ def get_dicts_list(is_static=False):
     data = response.json()
     return data
 
+# ПОИСК В ГЕОГРАФИЧЕСКИХ СЛОВАРЯХ
 def search_geo(search_term: str, geo_type: str = "countries") -> list:
     """Поиск в geo словарях"""
     if not search_term:
@@ -179,28 +188,11 @@ def search_geo_exact(search_term: str, geo_type: str = 'cities') -> list[dict]:
     
     return exact_matches
 
-def get_resident_country(search_term: str, citizenship: str):
+
+
+
     
-    if search_term:
-        if '/' in search_term:
-            return search_term.split('/')[0]
-        else:
-            if only_letters_regex(search_term):
-                if search_term in COUNTRY_TO_LANGUAGE:
-                    return search_term
-                else:
-                    exact_matches = search_geo_exact(search_term)
-                    if len(exact_matches)==1:
-                        return exact_matches[0]['country']['name']
-                    else:
-                        for item in exact_matches:
-                            if citizenship and item['country']['name'] == citizenship:
-                                return citizenship
-            else:
-                return None
-        
-    else:
-        return None
+    
     
 def search_geo_dict(geo_type: str = "countries") -> list:#search_term: str, geo_type: str = "countries") -> list:
     """Поиск в geo словарях"""
@@ -249,23 +241,10 @@ def get_id(dictionary, value, dict_name: str):
     else:
         return None
 
-# def get_id__(dictionary: list[dict], key: str, dict_name: str):
-#     found_id = next(
-#         (item["id"] for item in dictionary
-#          if isinstance(item.get("value"), str)
-#          and item["value"].lower() == key.lower()),
-#         None
-#     )
-#     if found_id is not None:
-#         return found_id
 
-#     # если не нашли — добавляем в конкретный словарь по имени
-#     created = _add_value_in_dict(key, dict_name)
-#     # подстрой под реальную структуру ответа
-#     return created.get("inserted", {}).get("id") or created.get("id")
     
 
-
+# ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ОЧИСТКИ ЗНАЧЕНИЙ В СЛОВАРЕ НА СЕРВЕРЕ
 def clean_languages(languages_list: list[dict]) -> list[dict]:
     """Очищает пустые + удаляет через API"""
     session = _get_session()
@@ -292,7 +271,12 @@ def clean_languages(languages_list: list[dict]) -> list[dict]:
         if item.get('value', '').strip()
     ]
 
-# ИСПОЛЬЗОВАТЬ
+# =========================
+# 2 PARSERS
+# =========================
+
+
+# ЧТЕНИЕ HTML ФАЙЛА
 def get_html_content(file_path):
     """
     возвращает объект bs4 для дальнейшего обращения разными парсерами
@@ -327,7 +311,7 @@ def get_photo_simple(soup):
     else:
         return None   
     
-    
+# ПАРСЕР ФОТО    
 def get_photo(soup):
     td = soup.find('td', class_='cvAvatar')
     if not td:
@@ -357,47 +341,19 @@ def get_photo(soup):
     }
 
 
-def build_seafarer_dict(
-    soup,
-    name,
-    middle_name,
-    surname,
-    rank_id,
-    additional_ranks,
-    date_of_birth,
-    place_of_birth,
-    gender_id,
-    marital_status_id,
-    nationality_country_id,
-    emails,
-    resident_country_id,
-    notes,
-    phones_list_of_dicts,
-    personal_id,
-    language_id_by_citizenship
-):
-    photo = get_photo(soup)
 
-    return {
-        "photo": photo,
-        "name": name,
-        "middle_name": middle_name,
-        "surname": surname,
-        "rank_id": rank_id,
-        "additional_ranks_id": additional_ranks,
-        "date_of_birth": date_of_birth,
-        "place_of_birth": place_of_birth,
-        "gender_id": gender_id,
-        "marital_status_id": marital_status_id,
-        "nationality_country_id": nationality_country_id,
-        "emails": emails,
-        "resident_status_id": resident_country_id,
-        "fast_note": notes,
-        "phone_numbers": phones_list_of_dicts,
-        "personal_id": personal_id,
-        "language_id": language_id_by_citizenship
-    }
+# ОЧИСТКА ТЕКСТА
+def text_cleaning(raw_text):
+    """очищает текст от непечатаемых спец символов
 
+    Args:
+        raw_text (str): неочищенная строка
+
+    Returns:
+        str: очищенная строка
+    """
+    text = re.sub(r'[^\x20-\x7Eа-яА-ЯёЁ\s]+|\s+', ' ', raw_text.strip())
+    return text
 
 # ОСНОВНОЙ ПАРСЕР 
 def main_parser(soup):
@@ -486,18 +442,7 @@ def main_parser(soup):
  
     return all_sections
 
-# ОЧИСТКА ТЕКСТА
-def text_cleaning(raw_text):
-    """очищает текст от непечатаемых спец символов
 
-    Args:
-        raw_text (str): неочищенная строка
-
-    Returns:
-        str: очищенная строка
-    """
-    text = re.sub(r'[^\x20-\x7Eа-яА-ЯёЁ\s]+|\s+', ' ', raw_text.strip())
-    return text
 
 # ПАРСЕР ТЕКСТА ЗАМЕТОК
 def parse_notes(soup):
@@ -526,8 +471,9 @@ def parse_notes(soup):
                         else:
                             return None
 
-
-# ОБРАБОТКА ДАННЫХ
+# =========================
+# 3 DATA HANDLING
+# =========================
 
 # вернуть только буквы
 def only_letters_regex(text):
@@ -551,7 +497,7 @@ def get_birth_day_place(birth_day_place_string):
         day, place = birth_day_place_string.split(' ',1)
     return day, place
 
-# очередна очистка текста
+# очистка текста
 def clean_letters_commas(text):    
     """
     Оставляет только буквы и запятые:
@@ -582,7 +528,8 @@ def clean_letters_commas(text):
     
     return result if result else None 
 
-def extract_date_to_iso(text):     # Главная функция: извлечь дату и вернуть ISO
+# Главная функция: извлечь дату и вернуть ISO
+def extract_date_to_iso(text):     
     """
     Ищет дату в строке, конвертирует в ISO (YYYY-MM-DD), возвращает кортеж:
     (iso_date или None, остальная_строка_без_даты)
@@ -634,6 +581,7 @@ def extract_date_to_iso(text):     # Главная функция: извлеч
     except ValueError:             # Если дата невалидна (32.13.2025)
         return None      # Возвращаем None и исходную строку
 
+# ****************************************
 # поиск всех емейлов
 def find_emails(text):
     pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
@@ -656,126 +604,34 @@ def get_emails_list(email_string):
     else:
         return None
     return emails_list
-
-# def get_dial_code_and_phone(long_phone_number:str, countries:list):
-#     if not long_phone_number:
-#         return None
-#     else:
-#         for length in range(2,6):
-#             prefix = long_phone_number[:length]
-#             phone_number = long_phone_number[length:]
-#             results = search_geo(prefix, 'countries') or []
-#             for item in results:
-#                 if len(results)==1:
-#                     dial_code = item.get('dial_code')
-#                     # phone_number = long_phone_number[length:]
-#                     country_id = item.get('id')
-#                     return dial_code, phone_number, country_id
-#                 else:
-#                     if item.get('name') in countries:#==country:
-#                         dial_code = item.get('dial_code')
-#                         # phone_number = long_phone_number[length:]
-#                         country_id = item.get('id')
-#                         return dial_code, phone_number, country_id
-
-# def get_phones(phones:str, countries:list)-> list[dict]:
-#     phones_list = []
-#     if not only_digits_spaces_plus_minus(phones):
-#         return None
-#     # 
-#     else:
-#         for phone_number in [x for x in phones.split(' ') if len(x) >= 12]:
-#             if phone_number.startswith('00'):
-#                 phone_number = "+" + phone_number[2:]
-#                 dial_code, ph_number, country_id = get_dial_code_and_phone(phone_number, countries)
-                
- 
-#             elif phone_number[0].isdigit():
-#                 phone_number = "+" + phone_number
-#                 dial_code, ph_number, country_id = get_dial_code_and_phone(phone_number, countries)
-                
-                
-#             else:
-#                 dial_code, ph_number, country_id = get_dial_code_and_phone(phone_number, countries)
-            
-#             phones_list.append({"uuid":"null", "country_id":country_id, "number":ph_number, "type_id":1, "comment":"comment"})
-            
-#         return  phones_list
-
-# ****************************************
-# def get_dial_code_and_phone(long_phone_number: str, countries: list):
-#     if not long_phone_number:
-#         return None
-
-#     for length in range(2, 6):
-#         prefix = long_phone_number[:length]
-#         results = search_geo(prefix, "countries") or []
-
-#         if len(results) == 1:
-#             item = results[0]
-#         else:
-#             item = next((x for x in results if x.get("name") in countries), None)
-
-#         if item:
-#             return (
-#                 item.get("dial_code"),
-#                 long_phone_number[length:],
-#                 item.get("id"),
-#             )
-
-#     return None
-
-
-# def normalize_phone(raw: str) -> str:
-#     return re.sub(r'\D', '', raw or "")
-
-
-# def get_dial_code_and_phone(raw_phone_number: str, countries: list):
-#     digits = normalize_phone(raw_phone_number)
-#     if not digits:
-#         return None
-
-#     candidates = [
-#         x
-#         for n in range(5, 1, -1)
-#         for x in (search_geo(digits[:n], "countries") or [])
-#         if x.get("name") in countries
-#         and digits.startswith(normalize_phone(str(x.get("dial_code", ""))))
-#     ]
-
-#     if not candidates:
-#         return None
-
-#     item = candidates[0]
-#     dial_code = normalize_phone(str(item.get("dial_code", "")))
-#     return item.get("dial_code"), digits[len(dial_code):], item.get("id")
-
-
-# def get_phones(phones: str, countries: list) -> list[dict]:
-#     if not phones:
-#         return []
-
-#     phones_list = []
-
-#     for raw_phone in phones.split():
-#         result = get_dial_code_and_phone(raw_phone, countries)
-#         if not result:
-#             continue
-
-#         dial_code, national_number, country_id = result
-#         phones_list.append({
-#             "uuid": "null",
-#             "country_id": country_id,
-#             "number": national_number,
-#             "type_id": 1,
-#             "comment": "comment",
-#         })
-
-#     return phones_list
 # ****************************************
 
-
-
+# ПОЛУЧЕНИЕ СТРАНЫ ПРОЖИВАНИЯ
+def get_resident_country(search_term: str, citizenship: str):
+    
+    if search_term:
+        if '/' in search_term:
+            return search_term.split('/')[0]
+        else:
+            if only_letters_regex(search_term):
+                if search_term in COUNTRY_TO_LANGUAGE:
+                    return search_term
+                else:
+                    exact_matches = search_geo_exact(search_term)
+                    if len(exact_matches)==1:
+                        return exact_matches[0]['country']['name']
+                    else:
+                        for item in exact_matches:
+                            if citizenship and item['country']['name'] == citizenship:
+                                return citizenship
+            else:
+                return None
+        
+    else:
+        return None
+    
+# ****************************************
+# ПОЛУЧЕНИЕ СЛОВАРЕЙ ТЕЛЕФОНОВ
 def normalize_phone(raw: str) -> str:
     raw = (raw or "").strip()
     if raw.startswith("00"):
@@ -864,8 +720,7 @@ def get_phones(phones: str, resident_country_id, nationality_country_id, search_
     return items
 
 # ****************************************
-                   
-            
+                              
 def only_letters_digits_spaces(text:str) -> bool:
     """Проверяет: только буквы, цифры, пробелы"""
     if not text:
@@ -1013,3 +868,45 @@ def country_to_language(country: str) -> Optional[str]:
             return lang
     
     return None
+
+
+def build_seafarer_dict(
+    soup,
+    name,
+    middle_name,
+    surname,
+    rank_id,
+    additional_ranks,
+    date_of_birth,
+    place_of_birth,
+    gender_id,
+    marital_status_id,
+    nationality_country_id,
+    emails,
+    resident_country_id,
+    notes,
+    phones_list_of_dicts,
+    personal_id,
+    language_id_by_citizenship
+):
+    photo = get_photo(soup)
+
+    return {
+        "photo": photo,
+        "name": name,
+        "middle_name": middle_name,
+        "surname": surname,
+        "rank_id": rank_id,
+        "additional_ranks_id": additional_ranks,
+        "date_of_birth": date_of_birth,
+        "place_of_birth": place_of_birth,
+        "gender_id": gender_id,
+        "marital_status_id": marital_status_id,
+        "nationality_country_id": nationality_country_id,
+        "emails": emails,
+        "resident_status_id": resident_country_id,
+        "fast_note": notes,
+        "phone_numbers": phones_list_of_dicts,
+        "personal_id": personal_id,
+        "language_id": language_id_by_citizenship
+    }
