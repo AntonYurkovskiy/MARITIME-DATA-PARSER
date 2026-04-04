@@ -24,6 +24,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from typing import Optional
+import phonenumbers
 
 load_dotenv()
 
@@ -94,6 +95,17 @@ def _add_value_in_dict(value: str, dict_name: str) -> dict:
     response = session.post(url, json={"value": value})
     response.raise_for_status()
     return response.json()
+
+def add_seafarer(main:dict[str, any])-> dict[str, any]:
+    """Добавляет данные о моряке на 360Crew API"""
+    session = _get_session()  # Кэшированная сессия
+    
+    url = f'https://staffdev.360crewing.com/api/v1/admin/seafarers/main'
+    
+    response = session.post(url, json=main)
+    response.raise_for_status()
+    return response.json()
+    
 
 # ПОЛУЧЕНИЕ СЛОВАРЯ ПО КЛЮЧУ
 
@@ -314,7 +326,77 @@ def get_photo_simple(soup):
         return mime_type, img_data
     else:
         return None   
+    
+    
+def get_photo(soup):
+    td = soup.find('td', class_='cvAvatar')
+    if not td:
+        return None
 
+    img = td.find('img')
+    if not img:
+        return None
+
+    src = img.get('src')
+    if not src or ',' not in src:
+        return None
+
+    header, data64 = src.split(',', 1)
+
+    if not header.startswith('data:'):
+        return None
+
+    mime_type = header.split(';', 1)[0].split(':', 1)[1]
+
+    if data64.startswith('iVBORw0KGgoAAAANSUhEUgAAARgAAAEZCAY'):
+        return None
+
+    return {
+        "mime_type": mime_type,
+        "img_data": data64
+    }
+
+
+def build_seafarer_dict(
+    soup,
+    name,
+    middle_name,
+    surname,
+    rank_id,
+    additional_ranks,
+    date_of_birth,
+    place_of_birth,
+    gender_id,
+    marital_status_id,
+    nationality_country_id,
+    emails,
+    resident_country_id,
+    notes,
+    phones_list_of_dicts,
+    personal_id,
+    language_id_by_citizenship
+):
+    photo = get_photo(soup)
+
+    return {
+        "photo": photo,
+        "name": name,
+        "middle_name": middle_name,
+        "surname": surname,
+        "rank_id": rank_id,
+        "additional_ranks_id": additional_ranks,
+        "date_of_birth": date_of_birth,
+        "place_of_birth": place_of_birth,
+        "gender_id": gender_id,
+        "marital_status_id": marital_status_id,
+        "nationality_country_id": nationality_country_id,
+        "emails": emails,
+        "resident_status_id": resident_country_id,
+        "fast_note": notes,
+        "phone_numbers": phones_list_of_dicts,
+        "personal_id": personal_id,
+        "language_id": language_id_by_citizenship
+    }
 
 
 # ОСНОВНОЙ ПАРСЕР 
@@ -644,55 +726,55 @@ def get_emails_list(email_string):
 #     return None
 
 
-def normalize_phone(raw: str) -> str:
-    return re.sub(r'\D', '', raw or "")
+# def normalize_phone(raw: str) -> str:
+#     return re.sub(r'\D', '', raw or "")
 
 
-def get_dial_code_and_phone(raw_phone_number: str, countries: list):
-    digits = normalize_phone(raw_phone_number)
-    if not digits:
-        return None
+# def get_dial_code_and_phone(raw_phone_number: str, countries: list):
+#     digits = normalize_phone(raw_phone_number)
+#     if not digits:
+#         return None
 
-    candidates = [
-        x
-        for n in range(5, 1, -1)
-        for x in (search_geo(digits[:n], "countries") or [])
-        if x.get("name") in countries
-        and digits.startswith(normalize_phone(str(x.get("dial_code", ""))))
-    ]
+#     candidates = [
+#         x
+#         for n in range(5, 1, -1)
+#         for x in (search_geo(digits[:n], "countries") or [])
+#         if x.get("name") in countries
+#         and digits.startswith(normalize_phone(str(x.get("dial_code", ""))))
+#     ]
 
-    if not candidates:
-        return None
+#     if not candidates:
+#         return None
 
-    item = candidates[0]
-    dial_code = normalize_phone(str(item.get("dial_code", "")))
-    return item.get("dial_code"), digits[len(dial_code):], item.get("id")
+#     item = candidates[0]
+#     dial_code = normalize_phone(str(item.get("dial_code", "")))
+#     return item.get("dial_code"), digits[len(dial_code):], item.get("id")
 
 
-def get_phones(phones: str, countries: list) -> list[dict]:
-    if not phones:
-        return []
+# def get_phones(phones: str, countries: list) -> list[dict]:
+#     if not phones:
+#         return []
 
-    phones_list = []
+#     phones_list = []
 
-    for raw_phone in phones.split():
-        result = get_dial_code_and_phone(raw_phone, countries)
-        if not result:
-            continue
+#     for raw_phone in phones.split():
+#         result = get_dial_code_and_phone(raw_phone, countries)
+#         if not result:
+#             continue
 
-        dial_code, national_number, country_id = result
-        phones_list.append({
-            "uuid": "null",
-            "country_id": country_id,
-            "number": national_number,
-            "type_id": 1,
-            "comment": "comment",
-        })
+#         dial_code, national_number, country_id = result
+#         phones_list.append({
+#             "uuid": "null",
+#             "country_id": country_id,
+#             "number": national_number,
+#             "type_id": 1,
+#             "comment": "comment",
+#         })
 
-    return phones_list
+#     return phones_list
 # ****************************************
 
-import phonenumbers
+
 
 def normalize_phone(raw: str) -> str:
     raw = (raw or "").strip()
