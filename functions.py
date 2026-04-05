@@ -174,7 +174,60 @@ def search_geo(search_term: str, geo_type: str = "countries") -> list:
             print(f"❌ {response.text}")
             return []
 
+def search_vessel(search_term: str, geo_type: str = "countries") -> list:
+    """Поиск в geo словарях"""
+    if not search_term:
+        return None
+    else:
+        session = _get_session()
 
+        base_url = 'https://staffdev.360crewing.com/api/v1/dict'
+       
+        url = f'{base_url}/vessels/search/{search_term}'
+       
+
+        payload = {
+            "term": search_term,
+            "exact": True  # ← Точное совпадение!
+        }
+        # print(f"🔍 GET {url}")
+        response = session.get(url,json=payload)  
+
+        # print(f"Status: {response.status_code}")
+        if response.status_code == 200:
+            data = response.json()
+            # print(f"✅ Найдено: {len(data)} записей")
+            return data
+        else:
+            print(f"❌ {response.text}")
+            return []
+
+from typing import Any
+
+def search_external_vessel(name_or_imo: str) -> list[dict[str, Any]]:
+    if not name_or_imo:
+        return None
+    else:
+        session = _get_session()
+    
+        url = "https://staffdev.360crewing.com/api/v1/vessels/search"
+        payload = {
+            "pagination": {"page": 1, "per_page": 25},
+            "filters": {
+                "combinator": "or",
+                "rules": [
+                    {"field": "name", "operator": "contains", "value": name_or_imo},
+                    {"field": "imo_no", "operator": "contains", "value": name_or_imo},
+                ],
+            },
+            "metadata": {"external": True},
+        }
+
+        response = session.post(url, json=payload)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("items", [])
+        
 def search_geo_exact(search_term: str, geo_type: str = 'cities') -> list[dict]:
     """Только ТОЧНЫЕ совпадения"""
     # Получаем все результаты поиска
