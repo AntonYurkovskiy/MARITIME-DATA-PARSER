@@ -104,13 +104,34 @@ def _add_value_in_dict(value: str, dict_name: str) -> dict:
     response.raise_for_status()
     return response.json()
 
+# явное приведение к строковым данным всех id
+def stringify_id_fields(data: dict) -> dict:
+    result = {}
+    for key, value in data.items():
+        if isinstance(value, dict):
+            result[key] = stringify_id_fields(value)
+        elif isinstance(value, list):
+            result[key] = [
+                stringify_id_fields(x) if isinstance(x, dict) else x
+                for x in value
+            ]
+        elif key.endswith("_id") and value is not None:
+            result[key] = str(value)
+        else:
+            result[key] = value
+    return result
+
 def add_seafarer(main:dict[str, any])-> dict[str, any]:
     """Добавляет данные о моряке на 360Crew API"""
     session = _get_session()  # Кэшированная сессия
     
-    url = f'https://staffdev.360crewing.com/api/v1/admin/seafarers/main'
+    url = f'https://staffdev.360crewing.com/api/v1/seafarers/'
+            
+    payload = stringify_id_fields(main)
     
-    response = session.post(url, json=main)
+    response = session.post(url, json=payload)
+    print(response.status_code)
+    print(response.text)
     response.raise_for_status()
     return response.json()
     
@@ -537,10 +558,12 @@ def only_letters_regex(text):
 def get_names(names_string):
     # предполагаем что первым идет имя
     name = only_letters_regex(names_string.split(' ')[0])
+    name = name if name else 'Field is Empty / Поле не заполненно'
     # все что в середине здесь
     middle_name = only_letters_regex(names_string.split(' ',1)[1].rsplit(' ',1)[0] if len(names_string.split(' ')) > 2 else None)
     # фамилия в конце
     surname = only_letters_regex(names_string.split(' ')[-1]) 
+    surname = surname if surname else 'Field is Empty / Поле не заполненно'
     return name, middle_name, surname 
     
 
@@ -764,7 +787,7 @@ def get_phones(phones: str, resident_country_id, nationality_country_id, search_
             continue
 
         items.append({
-            "uuid": "null",
+            "uuid": None,
             "country_id": row["country_id"],
             "number": row["national_number"],
             "type_id": 1,
@@ -957,7 +980,7 @@ def build_seafarer_dict(
         "marital_status_id": marital_status_id,
         "nationality_country_id": nationality_country_id,
         "emails": emails,
-        "resident_status_id": resident_country_id,
+        # "resident_status_id": resident_country_id,
         "fast_note": notes,
         "phone_numbers": phones_list_of_dicts,
         "personal_id": personal_id,
