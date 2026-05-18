@@ -30,6 +30,13 @@ from urllib3.util.retry import Retry
 from typing import Optional
 import phonenumbers
 
+from pathlib import Path
+
+import difflib
+
+import rapidfuzz
+from rapidfuzz import fuzz, process, utils
+
 load_dotenv()
 
 # =========================
@@ -128,13 +135,444 @@ def add_seafarer(main:dict[str, any])-> dict[str, any]:
     url = f'https://staffdev.360crewing.com/api/v1/seafarers/'
             
     payload = stringify_id_fields(main)
+    payload.pop("photo", None)
     
     response = session.post(url, json=payload)
     print(response.status_code)
     print(response.text)
     response.raise_for_status()
     return response.json()
+
+def upload_seafarer_photo(seafarer_uuid: str, photo: dict[str, any]) -> dict[str, any]:
+    """Загружает фото моряка отдельным запросом"""
+    if not photo or not photo.get("file_obj"):
+        return {"status": "no photo"}
     
+    session = requests.Session()
+    login_data = {
+            "email": os.getenv("CREWING_EMAIL"),
+            "password": os.getenv("CREWING_PASSWORD"),
+            "forced": True
+        }
+
+    headers = {'Content-Type': 'application/json'} 
+    login_response = session.post(
+                'https://staffdev.360crewing.com/api/v1/auth/login', 
+                json=login_data, 
+                headers=headers
+            )
+    login_response.raise_for_status() 
+    token = login_response.json().get("access_token")
+    
+    url = f'https://staffdev.360crewing.com/api/v1/seafarers/{seafarer_uuid}/main'
+
+    photo["file_obj"].seek(0)
+    payload = {"data": '{"photo":{"fileRef":"A"}}'}
+    
+    files=[
+        ('A',(photo.get("filename", "photo.jpg"), photo["file_obj"], photo.get("mime_type", "image/jpeg")))
+        ]
+    headers = {
+    'Authorization': f'Bearer {token}', 
+        }
+    response = requests.request("PUT", url, headers=headers, data=payload, files=files)
+    print(response.status_code)
+    print(response.text)
+    response.raise_for_status()
+    return response.json() 
+ 
+ 
+# ********************  
+# ПОИСК СУДНА 
+# И 
+# ДОБАВЛЕНИЕ 
+# vessel_uuid
+
+# def get_internal_vessel_uuid(vessel_name:str):
+#     session = _get_session()  # Кэшированная сессия
+    
+#     search_url = 'https://staffdev.360crewing.com/api/v1/vessels/search'
+    
+#     payload = {
+#         "pagination":{"page":1,"per_page":25},
+#         "filters":
+#             {
+#                 "combinator":"or",
+#                 "rules":[
+#                     {"field":"details_history.name","operator":"contains","value":vessel_name},
+#                     {"field":"name","operator":"contains","value":vessel_name},
+#                     {"field":"imo_no","operator":"contains","value":vessel_name}
+#                     ]
+#                 },
+#             "metadata":{"external":True}
+#             }
+    
+#     response = session.post(search_url, json=payload)
+#     print(response.status_code)
+#     response.raise_for_status()
+    
+#     external_vessel_uuid = response.json()['items'][0]['uuid'] 
+#     url = 'https://staffdev.360crewing.com/api/v1/vessels'
+#     payload = {"external_uuid": external_vessel_uuid}
+#     response = session.post(url, json=payload)
+    
+#     return response.json()['inserted']['uuid']
+
+# начало здесь
+def search_vessel(vessel_name:str, source:str, route: str):
+    """Ищет данные о судне с названием vessel_name
+    в базе данных с параметром source
+    расположенной на сервере по ручке route
+
+    Args:
+        vessel_name (str): Название судна
+        source (str): тип источника для параметра metadata
+        route (str): ручка где на сервере расположена база данных
+
+    Returns:
+        dict: ответ сервера с результатами поискового запроса
+    """
+    session = _get_session()  # Кэшированная сессия
+    
+    url = 'https://staffdev.360crewing.com/api/v1/vessels'
+    
+    search_url = f"{url}{route}"
+    
+    payload = {
+        "pagination":{"page":1,"per_page":25},
+        "filters":
+            {
+                "combinator":"or",
+                "rules":[
+                    {"field":"details_history.name","operator":"contains","value":vessel_name},
+                    {"field":"name","operator":"contains","value":vessel_name},
+                    {"field":"imo_no","operator":"contains","value":vessel_name}
+                    ]
+                },
+            "metadata":{"source":source}
+            }
+    
+    response = session.post(search_url, json=payload)
+    # print(response.status_code)
+    response.raise_for_status()
+    return response.json()
+
+def _extract_items(result):
+    if isinstance(result, dict):
+        return result.get("items", []) or []
+    if isinstance(result, list):
+        return result
+    return []
+
+def _get_vessel_name(item):
+    if not isinstance(item, dict):
+        return ""
+    
+    details = item.get("details_history") or {}
+    return (
+        item.get("name")
+        or details.get("name")
+        or item.get("imo_no")
+        or ""
+    )
+    
+def _normalize(text: str) -> str:
+    # text = text.replace('mv ','',1).replace('Mv/','',1)
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+# def _normalize(text: str) -> str:
+    
+#     text = re.sub(r"^(mv\s*|mv/|m/v\s*|m/v/)", "", text, flags=re.IGNORECASE)
+#     text = text.lower()
+#     text = re.sub(r"[^a-z0-9\s]", " ", text)
+#     text = re.sub(r"\s+", " ", text).strip()
+#     return text
+
+# def _normalize(text: str) -> str:
+#     text = text.split(" / ")[0].strip()
+#     text = re.sub(r"^(mv\s*|mv/|m/v\s*|m/v/)", "", text, flags=re.IGNORECASE)
+#     text = text.lower()
+#     text = re.sub(r"[^a-z0-9\s]", " ", text)
+#     text = re.sub(r"\s+", " ", text).strip()
+#     return text
+
+def _name_variants(vessel_name: str):
+    parts = _normalize(vessel_name).split()
+
+    variants = [vessel_name]
+
+    if len(parts) >= 2:
+        variants.append(parts[0])          # prince
+        variants.append(parts[-1])         # bassel
+        variants.append(" ".join(parts[:2]))   # prince bassel
+        variants.append(" ".join(parts[-2:]))  # prince bassel
+
+    seen = set()
+    result = []
+    for v in variants:
+        v = v.strip()
+        if v and v.lower() not in seen:
+            seen.add(v.lower())
+            result.append(v)
+    return result
+
+def _best_fuzzy_item(query: str, items: list):
+    best_item = None
+    best_score = -1
+
+    for item in items:
+        candidate = _get_vessel_name(item)
+        if not candidate:
+            continue
+
+        score = fuzz.WRatio(
+            query,
+            candidate,
+            processor=utils.default_process,
+            score_cutoff=0,
+        )
+
+        if score > best_score:
+            best_score = score
+            best_item = item
+
+    return best_item, best_score
+
+def get_vessel_uuid(vessel_name: str):
+    sources = [
+        ("historical", "/historical/search"),
+        ("local", "/search"),
+        ("external", "/search"),
+    ]
+
+    best_item = None
+    best_source = None
+    best_score = -1
+
+    # 1) Сначала пробуем полный запрос через contains
+    for source, route in sources:
+        result = search_vessel(vessel_name, source, route)
+        items = _extract_items(result)
+
+        if items:
+            for item in items:
+                candidate = _get_vessel_name(item)
+                if not candidate:
+                    continue
+
+                if _normalize(candidate) == _normalize(vessel_name):
+                    return item.get("uuid"), source, item
+
+            item, score = _best_fuzzy_item(vessel_name, items)
+            if item and score > best_score:
+                best_item = item
+                best_source = source
+                best_score = score
+
+    # 2) Если ничего не нашлось, пробуем части имени
+    for query in _name_variants(vessel_name):
+        if _normalize(query) == _normalize(vessel_name):
+            continue
+
+        for source, route in sources:
+            result = search_vessel(query, source, route)
+            items = _extract_items(result)
+
+            if not items:
+                continue
+
+            for item in items:
+                candidate = _get_vessel_name(item)
+                if not candidate:
+                    continue
+
+                score = fuzz.WRatio(
+                    vessel_name,
+                    candidate,
+                    processor=utils.default_process,
+                    score_cutoff=0,
+                )
+
+                if score > best_score:
+                    best_item = item
+                    best_source = source
+                    best_score = score
+
+    if best_item and best_score >= 80:
+        return best_item.get("uuid"), best_source, best_item
+
+    return None, None, None
+
+# def add_vessel_uuid(vessel_name: str):
+    # sources = [
+    #     ("historical", "/historical/search"),
+    #     ("local", "/search"),
+    #     ("external", "/search"),
+    # ]
+
+    # query = vessel_name
+
+    # best_item = None
+    # best_source = None
+    # best_score = 0
+
+    # for source, route in sources:
+    #     result = search_vessel(vessel_name, source, route)
+    #     items = _extract_items(result)
+        
+    #     print("SOURCE:", source)
+    #     print("QUERY:", vessel_name)
+    #     print("ITEMS:", len(items))
+    #     for item in items[:10]:
+    #         print(
+    #             _get_vessel_name(item),
+    #             fuzz.WRatio(vessel_name, _get_vessel_name(item), processor=utils.default_process)
+    #             )
+
+    #     if not items:
+    #         continue
+
+    #     for item in items:
+    #         candidate = _get_vessel_name(item)
+    #         if not candidate:
+    #             continue
+
+    #         score = fuzz.WRatio(
+    #             query,
+    #             candidate,
+    #             processor=utils.default_process,
+    #             score_cutoff=0,
+    #         )
+
+    #         if score > best_score:
+    #             best_score = score
+    #             best_item = item
+    #             best_source = source
+
+    #         if score == 100:
+    #             return item.get("uuid"), source, item
+
+    # if best_item and best_score >= 80:
+    #     return best_item.get("uuid"), best_source, best_item
+
+    # return None, None, None
+
+# def _normalize(text: str) -> str:
+#     return " ".join(text.lower().split())
+    
+# def get_vessel_uuid(vessel_name):
+#     sources = [
+#         ("historical", "/historical/search"),
+#         ("local", "/search"),
+#         ("external", "/search"),
+#     ]
+    
+#     query = _normalize(vessel_name)
+    
+#     best_item = None
+#     best_source = None
+#     best_score = 0.0
+
+#     for source, route in sources:
+#         result = search_vessel(vessel_name, source, route)
+#         items = _extract_items(result)
+        
+#         if not items:
+#             continue
+        
+#         for item in items:
+#             candidate = _get_candidate_text(item)
+#             if not candidate:
+#                 continue
+            
+#             candidate_norm = _normalize(candidate)
+
+#             if candidate_norm == query:
+#                 return item.get("uuid"), source, item
+
+#             score = difflib.SequenceMatcher(None, query, candidate_norm).ratio()
+            
+#             if score > best_score:
+#                 best_score = score
+#                 best_item = item
+#                 best_source = source
+        
+#         if best_score >= 0.90 and best_item:
+#             return best_item.get("uuid"), best_source, best_item
+
+#     if best_item and best_score >= 0.70:
+#         return best_item.get("uuid"), best_source, best_item
+
+#     return None, None, None
+        
+    #     if result['items']:
+    #         return result, source
+        
+    # return None
+    
+def add_historical_contracts(sea_service:list[dict], seafarer_uuid:str, ranks)-> dict[str, any]:
+    
+    
+    """Добавляет данные о контракте на 360Crew API"""
+    session = _get_session()  # Кэшированная сессия
+    
+    url = 'https://staffdev.360crewing.com/api/v1/contracts/historical'
+    
+    payload = {
+        "seafarer_uuid":seafarer_uuid,
+        "sign_on_date":extract_date_to_iso(sea_service[0].get('From - Till').split('-')[0].strip())[0],
+        "sign_off_date":extract_date_to_iso(sea_service[0].get('From - Till').split('-')[1].strip())[0],
+        "rank_id":get_id(ranks, sea_service[0].get('Position'),'ranks'),
+        "vessel":
+            {
+                "uuid":get_vessel_uuid(sea_service[0].get('Vessel Name / Flag').split(' / ')[0].strip())[0][0],
+                "source":get_vessel_uuid()[1]
+                }
+            }
+      
+    
+    
+    response = session.post(url, json=payload)
+    print(response.status_code)
+    print(response.text)
+    response.raise_for_status()
+    return response.json()
+
+def simple_cleaned_vessel_name(raw_vessel_name):
+    return raw_vessel_name.replace('mv ','',1).replace('Mv/','',1)
+
+def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
+    
+    name_and_flag = contract_details.get('Vessel Name / Flag', None)
+    
+    name = simple_cleaned_vessel_name(name_and_flag.rsplit(' / ',1)[0].strip())
+    flag_country_id = search_geo(name_and_flag.rsplit(' / ',1)[1].strip())[0]['id']
+    
+    vessel_type = contract_details.get('Vessel type / DWT', None).rsplit(' / ',1)[0].strip()
+    type_id = get_id(local_vessel_types, vessel_type, 'vessel_types')
+    
+    # дописать добавление инфы: DWT,ME_type / kW, Shipowner / Country
+
+    session = _get_session()
+    
+    url = 'https://staffdev.360crewing.com/api/v1/vessels'
+    
+    payload = {
+        "name":name,
+        "imo_no":'No info',
+        "type_id":type_id,
+        "gt":1,
+        "flag_country_id":flag_country_id
+        }
+    
+    response = session.post(url, json=payload)
+    print(response.status_code)
+    print(response.text)
+    response.raise_for_status()
+    return response.json()
 
 # ПОЛУЧЕНИЕ СЛОВАРЯ ПО КЛЮЧУ
 
@@ -195,33 +633,14 @@ def search_geo(search_term: str, geo_type: str = "countries") -> list:
             print(f"❌ {response.text}")
             return []
 
-def search_vessel(search_term: str, geo_type: str = "countries") -> list:
-    """Поиск в geo словарях"""
-    if not search_term:
-        return None
-    else:
-        session = _get_session()
 
-        base_url = 'https://staffdev.360crewing.com/api/v1/dict'
-       
-        url = f'{base_url}/vessels/search/{search_term}'
-       
 
-        payload = {
-            "term": search_term,
-            "exact": True  # ← Точное совпадение!
-        }
-        # print(f"🔍 GET {url}")
-        response = session.get(url,json=payload)  
-
-        # print(f"Status: {response.status_code}")
-        if response.status_code == 200:
-            data = response.json()
-            # print(f"✅ Найдено: {len(data)} записей")
-            return data
-        else:
-            print(f"❌ {response.text}")
-            return []
+# def search_vessel_bases(vessel_name:str):
+    
+#     base_url = 'https://staffdev.360crewing.com/api/v1/'
+    
+#     historical = 
+    
 
 from typing import Any
 
@@ -261,12 +680,6 @@ def search_geo_exact(search_term: str, geo_type: str = 'cities') -> list[dict]:
     ]
     
     return exact_matches
-
-
-
-
-    
-    
     
 def search_geo_dict(geo_type: str = "countries") -> list:#search_term: str, geo_type: str = "countries") -> list:
     """Поиск в geo словарях"""
@@ -386,7 +799,38 @@ def get_photo_simple(soup):
         return None   
     
 # ПАРСЕР ФОТО    
-def get_photo(soup):
+# def get_photo(soup):
+#     td = soup.find('td', class_='cvAvatar')
+#     if not td:
+#         return None
+
+#     img = td.find('img')
+#     if not img:
+#         return None
+
+#     src = img.get('src')
+#     if not src or ',' not in src:
+#         return None
+
+#     header, data64 = src.split(',', 1)
+
+#     if not header.startswith('data:'):
+#         return None
+
+#     mime_type = header.split(';', 1)[0].split(':', 1)[1]
+#     image_bytes = base64.b64decode(data64)
+
+#     if data64.startswith('iVBORw0KGgoAAAANSUhEUgAAARgAAAEZCAY'):
+#         return None
+
+#     return {
+#         "mime_type": mime_type,
+#         # "file_obj": image_bytes,
+#         "file_obj": io.BytesIO(image_bytes),
+#         "filename": "photo.jpg"
+#     }
+    
+def get_photo(soup, save_dir="out_manual", filename="photo.jpg"):
     td = soup.find('td', class_='cvAvatar')
     if not td:
         return None
@@ -400,20 +844,35 @@ def get_photo(soup):
         return None
 
     header, data64 = src.split(',', 1)
-
     if not header.startswith('data:'):
         return None
 
     mime_type = header.split(';', 1)[0].split(':', 1)[1]
+    image_bytes = base64.b64decode(data64)
 
     if data64.startswith('iVBORw0KGgoAAAANSUhEUgAAARgAAAEZCAY'):
         return None
 
+    ext = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "image/webp": ".webp",
+    }.get(mime_type, ".bin")
+
+    save_path = Path(save_dir)
+    save_path.mkdir(parents=True, exist_ok=True)
+
+    full_path = save_path / Path(filename).with_suffix(ext)
+    with open(full_path, "wb") as f:
+        f.write(image_bytes)
+
     return {
         "mime_type": mime_type,
-        "img_data": data64
+        "file_obj": io.BytesIO(image_bytes),
+        "filename": full_path.name,
+        "saved_path": str(full_path),
     }
-
 
 
 # ОЧИСТКА ТЕКСТА
