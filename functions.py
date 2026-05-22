@@ -36,6 +36,7 @@ import difflib
 
 import rapidfuzz
 from rapidfuzz import fuzz, process, utils
+from mapping_utils import get_value, set_value, update_mapping
 
 load_dotenv()
 
@@ -43,7 +44,7 @@ load_dotenv()
 # 1 REQUESTS
 # =========================
 
-# @lru_cache(maxsize=1)  
+@lru_cache(maxsize=1)  
 def _get_session():
     """Единая авторизация для всех запросов"""
     session = requests.Session()
@@ -98,7 +99,13 @@ def _get_session():
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     })
     
-    # print("✅ Авторизация успешна!")
+    print("✅ Авторизация успешна!")
+    # print("login status:", login_response.status_code)
+    # print("login text:", login_response.text)
+    data = login_response.json()
+    # print("keys:", data.keys())
+    # print("token:", data.get("access_token"))
+    # print("session auth header:", session.headers.get("Authorization"))
     return session
 
 
@@ -188,36 +195,6 @@ def upload_seafarer_photo(seafarer_uuid: str, photo: dict[str, any]) -> dict[str
 # ДОБАВЛЕНИЕ 
 # vessel_uuid
 
-# def get_internal_vessel_uuid(vessel_name:str):
-#     session = _get_session()  # Кэшированная сессия
-    
-#     search_url = 'https://staffdev.360crewing.com/api/v1/vessels/search'
-    
-#     payload = {
-#         "pagination":{"page":1,"per_page":25},
-#         "filters":
-#             {
-#                 "combinator":"or",
-#                 "rules":[
-#                     {"field":"details_history.name","operator":"contains","value":vessel_name},
-#                     {"field":"name","operator":"contains","value":vessel_name},
-#                     {"field":"imo_no","operator":"contains","value":vessel_name}
-#                     ]
-#                 },
-#             "metadata":{"external":True}
-#             }
-    
-#     response = session.post(search_url, json=payload)
-#     print(response.status_code)
-#     response.raise_for_status()
-    
-#     external_vessel_uuid = response.json()['items'][0]['uuid'] 
-#     url = 'https://staffdev.360crewing.com/api/v1/vessels'
-#     payload = {"external_uuid": external_vessel_uuid}
-#     response = session.post(url, json=payload)
-    
-#     return response.json()['inserted']['uuid']
-
 # начало здесь
 def search_vessel(vessel_name:str, source:str, route: str):
     """Ищет данные о судне с названием vessel_name
@@ -277,27 +254,11 @@ def _get_vessel_name(item):
     )
     
 def _normalize(text: str) -> str:
-    # text = text.replace('mv ','',1).replace('Mv/','',1)
+    
     text = text.lower()
     text = re.sub(r"[^a-z0-9\s]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
-
-# def _normalize(text: str) -> str:
-    
-#     text = re.sub(r"^(mv\s*|mv/|m/v\s*|m/v/)", "", text, flags=re.IGNORECASE)
-#     text = text.lower()
-#     text = re.sub(r"[^a-z0-9\s]", " ", text)
-#     text = re.sub(r"\s+", " ", text).strip()
-#     return text
-
-# def _normalize(text: str) -> str:
-#     text = text.split(" / ")[0].strip()
-#     text = re.sub(r"^(mv\s*|mv/|m/v\s*|m/v/)", "", text, flags=re.IGNORECASE)
-#     text = text.lower()
-#     text = re.sub(r"[^a-z0-9\s]", " ", text)
-#     text = re.sub(r"\s+", " ", text).strip()
-#     return text
 
 def _name_variants(vessel_name: str):
     parts = _normalize(vessel_name).split()
@@ -344,7 +305,7 @@ def _best_fuzzy_item(query: str, items: list):
 def get_vessel_uuid(vessel_name: str):
     sources = [
         ("historical", "/historical/search"),
-        ("local", "/search"),
+        ("main", "/search"),
         ("external", "/search"),
     ]
 
@@ -406,141 +367,6 @@ def get_vessel_uuid(vessel_name: str):
 
     return None, None, None
 
-# def add_vessel_uuid(vessel_name: str):
-    # sources = [
-    #     ("historical", "/historical/search"),
-    #     ("local", "/search"),
-    #     ("external", "/search"),
-    # ]
-
-    # query = vessel_name
-
-    # best_item = None
-    # best_source = None
-    # best_score = 0
-
-    # for source, route in sources:
-    #     result = search_vessel(vessel_name, source, route)
-    #     items = _extract_items(result)
-        
-    #     print("SOURCE:", source)
-    #     print("QUERY:", vessel_name)
-    #     print("ITEMS:", len(items))
-    #     for item in items[:10]:
-    #         print(
-    #             _get_vessel_name(item),
-    #             fuzz.WRatio(vessel_name, _get_vessel_name(item), processor=utils.default_process)
-    #             )
-
-    #     if not items:
-    #         continue
-
-    #     for item in items:
-    #         candidate = _get_vessel_name(item)
-    #         if not candidate:
-    #             continue
-
-    #         score = fuzz.WRatio(
-    #             query,
-    #             candidate,
-    #             processor=utils.default_process,
-    #             score_cutoff=0,
-    #         )
-
-    #         if score > best_score:
-    #             best_score = score
-    #             best_item = item
-    #             best_source = source
-
-    #         if score == 100:
-    #             return item.get("uuid"), source, item
-
-    # if best_item and best_score >= 80:
-    #     return best_item.get("uuid"), best_source, best_item
-
-    # return None, None, None
-
-# def _normalize(text: str) -> str:
-#     return " ".join(text.lower().split())
-    
-# def get_vessel_uuid(vessel_name):
-#     sources = [
-#         ("historical", "/historical/search"),
-#         ("local", "/search"),
-#         ("external", "/search"),
-#     ]
-    
-#     query = _normalize(vessel_name)
-    
-#     best_item = None
-#     best_source = None
-#     best_score = 0.0
-
-#     for source, route in sources:
-#         result = search_vessel(vessel_name, source, route)
-#         items = _extract_items(result)
-        
-#         if not items:
-#             continue
-        
-#         for item in items:
-#             candidate = _get_candidate_text(item)
-#             if not candidate:
-#                 continue
-            
-#             candidate_norm = _normalize(candidate)
-
-#             if candidate_norm == query:
-#                 return item.get("uuid"), source, item
-
-#             score = difflib.SequenceMatcher(None, query, candidate_norm).ratio()
-            
-#             if score > best_score:
-#                 best_score = score
-#                 best_item = item
-#                 best_source = source
-        
-#         if best_score >= 0.90 and best_item:
-#             return best_item.get("uuid"), best_source, best_item
-
-#     if best_item and best_score >= 0.70:
-#         return best_item.get("uuid"), best_source, best_item
-
-#     return None, None, None
-        
-    #     if result['items']:
-    #         return result, source
-        
-    # return None
-    
-def add_historical_contracts(sea_service:list[dict], seafarer_uuid:str, ranks)-> dict[str, any]:
-    
-    
-    """Добавляет данные о контракте на 360Crew API"""
-    session = _get_session()  # Кэшированная сессия
-    
-    url = 'https://staffdev.360crewing.com/api/v1/contracts/historical'
-    
-    payload = {
-        "seafarer_uuid":seafarer_uuid,
-        "sign_on_date":extract_date_to_iso(sea_service[0].get('From - Till').split('-')[0].strip())[0],
-        "sign_off_date":extract_date_to_iso(sea_service[0].get('From - Till').split('-')[1].strip())[0],
-        "rank_id":get_id(ranks, sea_service[0].get('Position'),'ranks'),
-        "vessel":
-            {
-                "uuid":get_vessel_uuid(sea_service[0].get('Vessel Name / Flag').split(' / ')[0].strip())[0][0],
-                "source":get_vessel_uuid()[1]
-                }
-            }
-      
-    
-    
-    response = session.post(url, json=payload)
-    print(response.status_code)
-    print(response.text)
-    response.raise_for_status()
-    return response.json()
-
 def simple_cleaned_vessel_name(raw_vessel_name):
     return raw_vessel_name.replace('mv ','',1).replace('Mv/','',1)
 
@@ -548,8 +374,12 @@ def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
     
     name_and_flag = contract_details.get('Vessel Name / Flag', None)
     
-    name = simple_cleaned_vessel_name(name_and_flag.rsplit(' / ',1)[0].strip())
-    flag_country_id = search_geo(name_and_flag.rsplit(' / ',1)[1].strip())[0]['id']
+    name = simple_cleaned_vessel_name(name_and_flag.rsplit(' / ',1)[0].strip()).upper()
+    
+    flag_country = name_and_flag.rsplit(' / ',1)[1].strip()
+    
+    # flag_country_id = search_geo(flag_country)[0]['id'] if search_geo(flag_country) else search_geo(flag_country.replace('ksa','Saudi Arabia').replace('uae','United Arab Emirates'))
+    flag_country_id = search_geo(flag_country)[0]['id'] if search_geo(flag_country) else search_geo(get_value(flag_country))
     
     vessel_type = contract_details.get('Vessel type / DWT', None).rsplit(' / ',1)[0].strip()
     type_id = get_id(local_vessel_types, vessel_type, 'vessel_types')
@@ -558,7 +388,7 @@ def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
 
     session = _get_session()
     
-    url = 'https://staffdev.360crewing.com/api/v1/vessels'
+    url = 'https://staffdev.360crewing.com/api/v1/vessels/historical'
     
     payload = {
         "name":name,
@@ -571,6 +401,90 @@ def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
     response = session.post(url, json=payload)
     print(response.status_code)
     print(response.text)
+    response.raise_for_status()
+    return response.json()
+
+
+# def get_internal_id()
+    
+# все в одном запросе не работает
+# def add_historical_contracts(sea_service:list[dict], seafarer_uuid:str, ranks, position):
+#     """Добавляет данные о контракте на 360Crew API"""
+#     session = _get_session()  
+    
+#     url = 'https://staffdev.360crewing.com/api/v1/contracts/historical'
+    
+#     payload = {
+#         "is_historical":True,
+#         "seafarer_uuid":seafarer_uuid,
+#         "rank_id":get_id(ranks, position,'ranks'),
+#         "joinings":[
+#             {
+#                 "rank_id":get_id(ranks, item.get('Position'),'ranks'),
+                
+#                 "vessel":
+#                     {
+#                         "uuid":get_vessel_uuid(simple_cleaned_vessel_name(item.get('Vessel Name / Flag')))[0],
+#                         "source":get_vessel_uuid(simple_cleaned_vessel_name(item.get('Vessel Name / Flag')))[1]
+#                     },
+                
+#                 "is_automatic": True,
+#                 "sign_on_date":extract_date_to_iso(item.get('From - Till').split('-')[0].strip())[0],
+#                 "sign_off_date":extract_date_to_iso(item.get('From - Till').split('-')[1].strip())[0],
+#                 "off_reason_id":0,
+#                 "is_historical":1,
+#                 "details": "STRING"
+#                 } for item in sea_service
+#             ]
+#         }
+#     print(payload)  
+#     response = session.post(url, json=payload)
+#     print(response.status_code)
+#     print(response.text)
+#     response.raise_for_status()
+#     return response.json()
+
+
+# для одного запроса работает
+def add_historical_contract(sea_service:dict, seafarer_uuid:str, ranks, local_vessel_types):
+    """Добавляет данные о контракте на 360Crew API"""
+    # блок вычисления переменных
+    rank_id= get_id(ranks, sea_service.get('Position'),'ranks')
+    
+    uuid_and_source = get_vessel_uuid(simple_cleaned_vessel_name(sea_service.get('Vessel Name / Flag')))
+    
+    uuid = uuid_and_source[0] if uuid_and_source else _add_new_vessel(sea_service,local_vessel_types)
+    source = uuid_and_source[1] if uuid_and_source else 'historical'
+    
+    sign_on_date = extract_date_to_iso(sea_service.get('From - Till').split('-')[0].strip())[0]
+    sign_off_date = extract_date_to_iso(sea_service.get('From - Till').split('-')[1].strip())[0]
+    
+    session = _get_session()  
+    
+    url = 'https://staffdev.360crewing.com/api/v1/contracts/historical'
+    
+    payload = {
+        "is_historical":True,
+        "seafarer_uuid":seafarer_uuid,
+        "rank_id":rank_id,
+        "vessel":
+                    {
+                        "uuid":uuid,
+                        "source":source
+                    },
+                
+        "is_automatic": True,
+        "sign_on_date":sign_on_date,
+        "sign_off_date":sign_off_date,
+        "off_reason_id":0,
+        "is_historical":1,
+        "details": "STRING"
+        
+        }
+    # print(payload)  
+    response = session.post(url, json=payload)
+    # print(response.status_code)
+    # print(response.text)
     response.raise_for_status()
     return response.json()
 
@@ -609,6 +523,7 @@ def search_geo(search_term: str, geo_type: str = "countries") -> list:
     if not search_term:
         return None
     else:
+        # search_term = search_term.replace('ksa','Saudi Arabia').replace('uae','United Arab Emirates')
         session = _get_session()
 
         base_url = 'https://staffdev.360crewing.com/api/v1/dict'
@@ -619,27 +534,20 @@ def search_geo(search_term: str, geo_type: str = "countries") -> list:
 
         payload = {
             "term": search_term,
-            "exact": True  # ← Точное совпадение!
+            # "exact": True  # ← Точное совпадение!
         }
-        # print(f"🔍 GET {url}")
+        print(f"🔍 GET {url}")
         response = session.get(url,json=payload)  
 
-        # print(f"Status: {response.status_code}")
+        print(f"Status: {response.status_code}")
         if response.status_code == 200:
             data = response.json()
-            # print(f"✅ Найдено: {len(data)} записей")
+            print(f"✅ Найдено: {len(data)} записей")
             return data
         else:
             print(f"❌ {response.text}")
             return []
 
-
-
-# def search_vessel_bases(vessel_name:str):
-    
-#     base_url = 'https://staffdev.360crewing.com/api/v1/'
-    
-#     historical = 
     
 
 from typing import Any
