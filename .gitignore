@@ -5,6 +5,7 @@
 /out/
 /out_manual/
 /extracted_images/
+
 __pycache__
 tz.md
 *.zip

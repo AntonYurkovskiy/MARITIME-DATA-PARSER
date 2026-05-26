@@ -1,0 +1,391 @@
+{
+  "Main info": {
+    "Name / Surname:": "Mykhailo Ianishevskyi",
+    "Position applied for:": ["Chief Officer", "Master"],
+    "Desired Vessel Type:": ["LNG", "LPG"],
+    "Minimum salary $:": "Negotiable",
+    "Birthday / Place of birth:": "31.03.1991 Borzya, Russia",
+    "Phones:": "+34654225550",
+    "Citizenship:": "Ukraine",
+    "E-mail:": "mykhailoianishevskyi@gmail.com",
+    "Country of residence / City:": "Ukraine/Odesa",
+    "Messenger:": "LinkedIn : www.linkedin.com/in/michael-ianishevskyi-773a97217",
+    "Home address:": "4, Raduzhnyi",
+    "English level:": "Fluent",
+    "Closest airport:": "Tenerife",
+    "USA visa valid up:": "20.07.2026",
+    "Schengen visa valid up:": "05.03.2028"
+  },
+  "Passports / Smbk": [
+    {
+      "Title of document": "Seaman's book",
+      "No.": "AB575564",
+      "Date of issue": "14.01.2016",
+      "Country of issue": "Ukraine",
+      "Valid up": "12.11.2025"
+    },
+    {
+      "Title of document": "International passport",
+      "No.": "FK615263",
+      "Date of issue": "05.01.2018",
+      "Country of issue": "Ukraine",
+      "Valid up": "05.01.2028"
+    },
+    {
+      "Title of document": "National passport",
+      "No.": "KM460666",
+      "Date of issue": "08.05.2007",
+      "Country of issue": "Ukraine",
+      "Valid up": ""
+    }
+  ],
+  "Diplomas": [
+    {
+      "Title of document": "Professional license",
+      "No.": "07762/2023/08",
+      "Date of issue": "20.09.2023",
+      "Country of issue": "Ukraine",
+      "Valid up": "20.09.2028"
+    },
+    {
+      "Title of document": "Endorsement",
+      "No.": "",
+      "Date of issue": "20.09.2023",
+      "Country of issue": "",
+      "Valid up": "20.09.2028"
+    },
+    {
+      "Title of document": "Professional license",
+      "No.": "20381/2024",
+      "Date of issue": "29.01.2024",
+      "Country of issue": "Ukraine",
+      "Valid up": "29.01.2029"
+    },
+    {
+      "Title of document": "Endorsement",
+      "No.": "",
+      "Date of issue": "29.01.2024",
+      "Country of issue": "",
+      "Valid up": "29.01.2029"
+    }
+  ],
+  "Certificates": [
+    {
+      "Title of document": "Basic Safety Training",
+      "No.": "1351678",
+      "Date of issue": "29.06.2021",
+      "Country of issue": "Ukraine",
+      "Valid up": "29.06.2026"
+    },
+    {
+      "Title of document": "Security Awareness Training",
+      "No.": "1211",
+      "Date of issue": "15.06.2017",
+      "Country of issue": "Ukraine",
+      "Valid up": ""
+    },
+    {
+      "Title of document": "Designated Security Duties",
+      "No.": "242161",
+      "Date of issue": "24.03.2020",
+      "Country of issue": "Ukraine",
+      "Valid up": "24.03.2025"
+    },
+    {
+      "Title of document": "Advanced Fire Fighting",
+      "No.": "1351680",
+      "Date of issue": "29.06.2021",
+      "Country of issue": "Ukraine",
+      "Valid up": "29.06.2026"
+    },
+    {
+      "Title of document": "Proficiency in Survival Craft and RB",
+      "No.": "1351679",
+      "Date of issue": "29.06.2021",
+      "Country of issue": "Ukraine",
+      "Valid up": "29.06.2026"
+    },
+    {
+      "Title of document": "Medical First Aid",
+      "No.": "1351681",
+      "Date of issue": "29.06.2021",
+      "Country of issue": "Ukraine",
+      "Valid up": "29.06.2026"
+    },
+    {
+      "Title of document": "Medical Care",
+      "No.": "1351682",
+      "Date of issue": "29.06.2021",
+      "Country of issue": "Ukraine",
+      "Valid up": "29.06.2026"
+    },
+    {
+      "Title of document": "ECDIS",
+      "No.": "1559550",
+      "Date of issue": "24.03.2023",
+      "Country of issue": "Ukraine",
+      "Valid up": "24.03.2028"
+    },
+    {
+      "Title of document": "Ship Carrying Dangr/hazard Cargo",
+      "No.": "061783",
+      "Date of issue": "24.03.2020",
+      "Country of issue": "Ukraine",
+      "Valid up": "24.03.2025"
+    },
+    {
+      "Title of document": "Radar Management (ARPA+Radar)",
+      "No.": "1351684",
+      "Date of issue": "29.06.2021",
+      "Country of issue": "Ukraine",
+      "Valid up": "29.06.2026"
+    },
+    {
+      "Title of document": "Ship Security Officer",
+      "No.": "0001/2021",
+      "Date of issue": "08.01.2021",
+      "Country of issue": "Ukraine",
+      "Valid up": "08.01.2026"
+    },
+    {
+      "Title of document": "FURUNO ECDIS",
+      "No.": "TE32305",
+      "Date of issue": "27.04.2018",
+      "Country of issue": "Ukraine",
+      "Valid up": ""
+    },
+    {
+      "Title of document": "MCRM",
+      "No.": "BE24017",
+      "Date of issue": "20.03.2019",
+      "Country of issue": "Belgium",
+      "Valid up": ""
+    },
+    {
+      "Title of document": "SAM ELECTRONICS ECDIS",
+      "No.": "130292/445734",
+      "Date of issue": "24.11.2018",
+      "Country of issue": "Germany",
+      "Valid up": ""
+    },
+    {
+      "Title of document": "Security-Related Training and Instruction for all Seafarers",
+      "No.": "1351683",
+      "Date of issue": "29.06.2021",
+      "Country of issue": "Ukraine",
+      "Valid up": "29.06.2026"
+    },
+    {
+      "Title of document": "Bridge Resource Management (management level)",
+      "No.": "1351685",
+      "Date of issue": "29.06.2021",
+      "Country of issue": "Ukraine",
+      "Valid up": "29.06.2026"
+    },
+    {
+      "Title of document": "Ship Safety Officer",
+      "No.": "0191/2020",
+      "Date of issue": "31.12.2020",
+      "Country of issue": "Ukraine",
+      "Valid up": "31.12.2025"
+    },
+    {
+      "Title of document": "Advanced training for liquefied gas tanker cargo operations",
+      "No.": "0007/2023",
+      "Date of issue": "10.04.2023",
+      "Country of issue": "Ukraine",
+      "Valid up": "10.04.2028"
+    },
+    {
+      "Title of document": "Liquid cargo and ballast handling on liquefied petroleum gas tanker",
+      "No.": "CBHLPG21010602",
+      "Date of issue": "06.01.2021",
+      "Country of issue": "Ukraine",
+      "Valid up": "06.01.2026"
+    },
+    {
+      "Title of document": "COP on advanced training for cargo operations on tankers",
+      "No.": "05664/2023/08",
+      "Date of issue": "20.09.2023",
+      "Country of issue": "Ukraine",
+      "Valid up": "12.09.2028"
+    },
+    {
+      "Title of document": "Advanced Course in Gas Instruments",
+      "No.": "02356",
+      "Date of issue": "17.03.2023",
+      "Country of issue": "Greece",
+      "Valid up": ""
+    }
+  ],
+  "Medical certificates": [
+    {
+      "Title of document": "COVID vaccination (2 doses)",
+      "No.": "",
+      "Date of issue": "01.12.2021",
+      "Country of issue": "Ukraine",
+      "Valid up": "01.12.2022"
+    },
+    {
+      "Title of document": "Medical Certificate (Viva Vita)",
+      "No.": "00161",
+      "Date of issue": "27.03.2023",
+      "Country of issue": "Ukraine",
+      "Valid up": "27.03.2025"
+    }
+  ],
+  "Flag Documents and Other Countries Seaman's Books": [
+    {
+      "Country": "Malta",
+      "Document type": "Endorsement (Master)",
+      "No.": "222881",
+      "Date of issue": "02.04.2024",
+      "Valid up": "05.09.2028"
+    },
+    {
+      "Country": "Liberia",
+      "Document type": "Seaman's identification and record book",
+      "No.": "1342330",
+      "Date of issue": "30.06.2017",
+      "Valid up": "30.06.2022"
+    },
+    {
+      "Country": "Malta",
+      "Document type": "Seaman's book",
+      "No.": "M0027851",
+      "Date of issue": "19.01.2024",
+      "Valid up": "19.01.2034"
+    },
+    {
+      "Country": "Ukraine",
+      "Document type": "Seaman's seagoing service record book",
+      "No.": "00497/2015/22",
+      "Date of issue": "02.10.2015",
+      "Valid up": "02.10.2025"
+    },
+    {
+      "Country": "Belgium",
+      "Document type": "Seaman's book",
+      "No.": "201800504",
+      "Date of issue": "08.05.2018",
+      "Valid up": "08.05.2028"
+    }
+  ],
+  "Sea service (last 5 years)": [
+    {
+      "Position": "Chief Officer",
+      "Vessel Name / Flag": "COOL EXPLORER / MALTA",
+      "Vessel type / DWT": "LNG / 81893",
+      "ME Type / kW": "",
+      "From - Till": "19.06.2024 - 09.11.2024",
+      "Shipowner / Country": "THENAMARIS LNG / GREECE"
+    },
+    {
+      "Position": "Chief Officer",
+      "Vessel Name / Flag": "COOL EXPLORER / MALTA",
+      "Vessel type / DWT": "LNG / 81893",
+      "ME Type / kW": "",
+      "From - Till": "19.12.2023 - 22.02.2024",
+      "Shipowner / Country": "THENAMARIS LNG / GREECE"
+    },
+    {
+      "Position": "Chief Officer",
+      "Vessel Name / Flag": "SEASUCCESS / MALTA",
+      "Vessel type / DWT": "LPG - Fully refrigerated / 25079",
+      "ME Type / kW": "",
+      "From - Till": "30.10.2023 - 18.12.2023",
+      "Shipowner / Country": "THENAMARIS LNG / GREECE"
+    },
+    {
+      "Position": "Chief Officer",
+      "Vessel Name / Flag": "SEASHINE / MALTA",
+      "Vessel type / DWT": "LPG - Fully refrigerated / 25079",
+      "ME Type / kW": "",
+      "From - Till": "15.04.2023 - 30.07.2023",
+      "Shipowner / Country": "THENAMARIS LNG / GREECE"
+    },
+    {
+      "Position": "Chief Officer",
+      "Vessel Name / Flag": "SEASHINE / MALTA",
+      "Vessel type / DWT": "LPG - Fully refrigerated / 25079",
+      "ME Type / kW": "",
+      "From - Till": "13.08.2022 - 17.11.2022",
+      "Shipowner / Country": "THENAMARIS LNG / GREECE"
+    },
+    {
+      "Position": "Chief Officer",
+      "Vessel Name / Flag": "SEASHINE / MALTA",
+      "Vessel type / DWT": "LPG - Fully refrigerated / 25079",
+      "ME Type / kW": "",
+      "From - Till": "23.01.2022 - 08.07.2022",
+      "Shipowner / Country": "THENAMARIS LNG / GREECE"
+    },
+    {
+      "Position": "2nd Officer",
+      "Vessel Name / Flag": "SEASPEED / MALTA",
+      "Vessel type / DWT": "LPG - Fully refrigerated / 25079",
+      "ME Type / kW": "",
+      "From - Till": "11.01.2021 - 12.04.2021",
+      "Shipowner / Country": "THENAMARIS LNG / GREECE"
+    },
+    {
+      "Position": "2nd Officer",
+      "Vessel Name / Flag": "LIBRAMONT / BELGIUM",
+      "Vessel type / DWT": "LPG - Fully refrigerated / 29328",
+      "ME Type / kW": "",
+      "From - Till": "13.06.2020 - 22.10.2020",
+      "Shipowner / Country": "EXMAR SHIPPING BVBA / BELGIUM"
+    },
+    {
+      "Position": "3rd Officer",
+      "Vessel Name / Flag": "LIBRAMONT / BELGIUM",
+      "Vessel type / DWT": "LPG - Fully refrigerated / 29328",
+      "ME Type / kW": "",
+      "From - Till": "12.09.2019 - 07.01.2020",
+      "Shipowner / Country": "EXMAR SHIPPING BVBA / BELGIUM"
+    },
+    {
+      "Position": "2nd Officer",
+      "Vessel Name / Flag": "VENTURE GAS / LIBERIA",
+      "Vessel type / DWT": "LPG - Fully refrigerated / 49701",
+      "ME Type / kW": "",
+      "From - Till": "01.06.2019 - 02.09.2019",
+      "Shipowner / Country": "VENTURE GAS SHIPPING S.A. / LIBERIA"
+    },
+    {
+      "Position": "3rd Officer",
+      "Vessel Name / Flag": "LIBRAMONT / BELGIUM",
+      "Vessel type / DWT": "LPG - Fully refrigerated / 29328",
+      "ME Type / kW": "",
+      "From - Till": "09.12.2018 - 04.04.2019",
+      "Shipowner / Country": "EXMAR SHIPPING BVBA / BELGIUM"
+    },
+    {
+      "Position": "3rd Officer",
+      "Vessel Name / Flag": "WAREGEM / BELGIUM",
+      "Vessel type / DWT": "LPG - Fully refrigerated / 28518",
+      "ME Type / kW": "",
+      "From - Till": "22.05.2018 - 22.09.2018",
+      "Shipowner / Country": "EXMAR SHIPPING BVBA / BELGIUM"
+    }
+  ],
+  "Biometrics": {
+    "Sex": "male",
+    "Height": "186",
+    "Overall size": "L (50)",
+    "Eyes color": "Green",
+    "Weight": "88",
+    "Shoe size": "44"
+  },
+  "Additional info": {
+    "Maritime education:": "National University Odessa Maritime Academy",
+    "Additional skills:": "",
+    "Speciality:": "Navigation",
+    "Knowledge of other languages:": "English, Russian, Ukrainian, Spanish A1",
+    "Next of kin:": "Wife",
+    "Kin phone:": "",
+    "Kin name, Surname:": "Ianishevska Olha",
+    "Kin address:": ""
+  }}
+
+
