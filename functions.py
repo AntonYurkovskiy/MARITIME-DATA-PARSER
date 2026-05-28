@@ -37,8 +37,11 @@ import difflib
 import rapidfuzz
 from rapidfuzz import fuzz, process, utils
 from mapping_utils import get_value, set_value, update_mapping
+from config import API_BASE_URL, API_TIMEOUT
+import logging
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 # =========================
 # 1 REQUESTS
@@ -70,21 +73,20 @@ def _get_session():
     # ✅ КРИТИЧНО: timeout + обработка ошибок!
     try:
         login_response = session.post(
-            'https://staffdev.360crewing.com/api/v1/auth/login', 
+            f'{API_BASE_URL}/auth/login', 
             json=login_data, 
             headers=headers,
-            timeout=(30, 60)  # 10s коннект, 30s ответ
+            timeout=API_TIMEOUT  # 10s коннект, 30s ответ
         )
         login_response.raise_for_status()
     except requests.exceptions.Timeout:
-        print("⏰ TIMEOUT: staffdev.360crewing.com не отвечает!")
-        print("🔍 Проверьте: интернет, VPN, firewall")
+        logger.error("⏰ TIMEOUT: API не отвечает! Проверьте: интернет, VPN, firewall")
         raise
     except requests.exceptions.ConnectionError as e:
-        print(f"🌐 ConnectionError: {e}")
+        logger.error("🌐 ConnectionError: %s", e)
         raise
     except Exception as e:
-        print(f"❌ Login failed: {e}")
+        logger.error("❌ Login failed: %s", e)
         raise
     
     # ✅ Заголовки сессии
@@ -99,9 +101,9 @@ def _get_session():
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     })
     
-    print("✅ Авторизация успешна!")
-    # print("login status:", login_response.status_code)
-    # print("login text:", login_response.text)
+    logger.info("✅ Авторизация успешна!")
+    # logger.debug("login status: %s", login_response.status_code)
+    # logger.debug("login text: %s", login_response.text)
     data = login_response.json()
     # print("keys:", data.keys())
     # print("token:", data.get("access_token"))
@@ -112,7 +114,7 @@ def _get_session():
 def _add_value_in_dict(value: str, dict_name: str) -> dict:
     """Добавляет значение в словарь 360Crew API"""
     session = _get_session()  # Кэшированная сессия
-    url = f'https://staffdev.360crewing.com/api/v1/admin/dicts/{dict_name}'
+    url = f'{API_BASE_URL}/admin/dicts/{dict_name}'
     
     response = session.post(url, json={"value": value})
     response.raise_for_status()
@@ -139,14 +141,14 @@ def add_seafarer(main:dict[str, any])-> dict[str, any]:
     """Добавляет данные о моряке на 360Crew API"""
     session = _get_session()  # Кэшированная сессия
     
-    url = f'https://staffdev.360crewing.com/api/v1/seafarers/'
+    url = f'{API_BASE_URL}/seafarers/'
             
     payload = stringify_id_fields(main)
     payload.pop("photo", None)
     
     response = session.post(url, json=payload)
-    print(response.status_code)
-    print(response.text)
+    logger.debug("Response status: %s", response.status_code)
+    logger.debug("Response text: %s", response.text)
     response.raise_for_status()
     return response.json()
 
@@ -164,14 +166,14 @@ def upload_seafarer_photo(seafarer_uuid: str, photo: dict[str, any]) -> dict[str
 
     headers = {'Content-Type': 'application/json'} 
     login_response = session.post(
-                'https://staffdev.360crewing.com/api/v1/auth/login', 
+                f'{API_BASE_URL}/auth/login', 
                 json=login_data, 
                 headers=headers
             )
     login_response.raise_for_status() 
     token = login_response.json().get("access_token")
     
-    url = f'https://staffdev.360crewing.com/api/v1/seafarers/{seafarer_uuid}/main'
+    url = f'{API_BASE_URL}/seafarers/{seafarer_uuid}/main'
 
     photo["file_obj"].seek(0)
     payload = {"data": '{"photo":{"fileRef":"A"}}'}
@@ -183,8 +185,8 @@ def upload_seafarer_photo(seafarer_uuid: str, photo: dict[str, any]) -> dict[str
     'Authorization': f'Bearer {token}', 
         }
     response = requests.request("PUT", url, headers=headers, data=payload, files=files)
-    print(response.status_code)
-    print(response.text)
+    logger.debug("Response status: %s", response.status_code)
+    logger.debug("Response text: %s", response.text)
     response.raise_for_status()
     return response.json() 
  
@@ -211,7 +213,7 @@ def search_vessel(vessel_name:str, source:str, route: str):
     """
     session = _get_session()  # Кэшированная сессия
     
-    url = 'https://staffdev.360crewing.com/api/v1/vessels'
+    url = f'{API_BASE_URL}/vessels'
     
     search_url = f"{url}{route}"
     
@@ -388,7 +390,7 @@ def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
 
     session = _get_session()
     
-    url = 'https://staffdev.360crewing.com/api/v1/vessels/historical'
+    url = f'{API_BASE_URL}/vessels/historical'
     
     payload = {
         "name":name,
@@ -399,8 +401,8 @@ def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
         }
     
     response = session.post(url, json=payload)
-    print(response.status_code)
-    print(response.text)
+    logger.debug("Response status: %s", response.status_code)
+    logger.debug("Response text: %s", response.text)
     response.raise_for_status()
     return response.json()
 
@@ -412,7 +414,7 @@ def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
 #     """Добавляет данные о контракте на 360Crew API"""
 #     session = _get_session()  
     
-#     url = 'https://staffdev.360crewing.com/api/v1/contracts/historical'
+#     url = f'{API_BASE_URL}/contracts/historical'
     
 #     payload = {
 #         "is_historical":True,
@@ -461,7 +463,7 @@ def add_historical_contract(sea_service:dict, seafarer_uuid:str, ranks, local_ve
     
     session = _get_session()  
     
-    url = 'https://staffdev.360crewing.com/api/v1/contracts/historical'
+    url = f'{API_BASE_URL}/contracts/historical'
     
     payload = {
         "is_historical":True,
@@ -493,7 +495,7 @@ def add_historical_contract(sea_service:dict, seafarer_uuid:str, ranks, local_ve
 # @lru_cache(maxsize=128) 
 def get_dict(key):
     session = _get_session()  # Кэшированная сессия
-    domain = 'https://staffdev.360crewing.com/api/v1/dict/'
+    domain = f'{API_BASE_URL}/dict/'
     url = domain + key
     
     try:
@@ -501,7 +503,7 @@ def get_dict(key):
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        print(f"❌ Ошибка получения {key}: {e}")
+        logger.error("❌ Ошибка получения %s: %s", key, e)
         raise
 
 
@@ -510,7 +512,7 @@ def get_dicts_list(is_static=False):
     
     session = _get_session() 
     
-    url = f'https://staffdev.360crewing.com/api/v1/admin/dicts?is_static={is_static}'
+    url = f'{API_BASE_URL}/admin/dicts?is_static={is_static}'
     
     response = session.get(url)
     response.raise_for_status()
@@ -526,7 +528,7 @@ def search_geo(search_term: str, geo_type: str = "countries") -> list:
         # search_term = search_term.replace('ksa','Saudi Arabia').replace('uae','United Arab Emirates')
         session = _get_session()
 
-        base_url = 'https://staffdev.360crewing.com/api/v1/dict'
+        base_url = f'{API_BASE_URL}/dict'
         if geo_type in ['countries','cities','regions']:
             url = f'{base_url}/geo/{geo_type}/search/{search_term}'
         else:
@@ -536,16 +538,16 @@ def search_geo(search_term: str, geo_type: str = "countries") -> list:
             "term": search_term,
             # "exact": True  # ← Точное совпадение!
         }
-        print(f"🔍 GET {url}")
+        logger.debug("🔍 GET %s", url)
         response = session.get(url,json=payload)  
 
-        print(f"Status: {response.status_code}")
+        logger.debug("Status: %s", response.status_code)
         if response.status_code == 200:
             data = response.json()
-            print(f"✅ Найдено: {len(data)} записей")
+            logger.info("✅ Найдено: %s записей", len(data))
             return data
         else:
-            print(f"❌ {response.text}")
+            logger.warning("❌ Ошибка поиска: %s", response.text)
             return []
 
     
@@ -558,7 +560,7 @@ def search_external_vessel(name_or_imo: str) -> list[dict[str, Any]]:
     else:
         session = _get_session()
     
-        url = "https://staffdev.360crewing.com/api/v1/vessels/search"
+        url = f'{API_BASE_URL}/vessels/search'
         payload = {
             "pagination": {"page": 1, "per_page": 25},
             "filters": {
@@ -596,7 +598,7 @@ def search_geo_dict(geo_type: str = "countries") -> list:#search_term: str, geo_
     else:
         session = _get_session()
 
-        base_url = 'https://staffdev.360crewing.com/api/v1/dict'
+        base_url = f'{API_BASE_URL}/dict'
         if geo_type in ['countries','cities','regions']:
             url = f'{base_url}/geo/{geo_type}/search/'#{search_term}'
         else:
@@ -609,14 +611,13 @@ def search_geo_dict(geo_type: str = "countries") -> list:#search_term: str, geo_
         # print(f"🔍 GET {url}")
         response = session.get(url)#, json=payload)  
 
-        # print(f"Status: {response.status_code}")
+        logger.debug("Status: %s", response.status_code)
         if response.status_code == 200:
             data = response.json()
-            # print(f"✅ Найдено: {len(data)} записей")
+            logger.debug("✅ Найдено: %s записей", len(data))
             return data
         else:
-            print(f"❌ {response.text}")
-            return []
+            logger.warning("❌ Ошибка поиска: %s", response.text)
 # получение ID
 # def get_id(dictionary,key):
 #     id = next((item['id'] for item in dictionary if item['value'].lower() == key.lower()), None)
@@ -653,12 +654,12 @@ def clean_languages(languages_list: list[dict]) -> list[dict]:
     
     # 2. Удаляем через API (если нужно)
     for empty_id in empty_ids:
-        delete_url = f'https://staffdev.360crewing.com/api/v1/admin/dicts/languages/{empty_id}'
+        delete_url = f'{API_BASE_URL}/admin/dicts/languages/{empty_id}'
         try:
             session.delete(delete_url)
-            print(f"🗑️ Удалён ID: {empty_id}")
-        except:
-            pass  # если не удалилось - просто пропустим
+            logger.info("🗑️ Удалён ID: %s", empty_id)
+        except Exception as e:
+            logger.warning("Не удалось удалить ID %s: %s", empty_id, e)
     
     # 3. Фильтруем локально
     return [
