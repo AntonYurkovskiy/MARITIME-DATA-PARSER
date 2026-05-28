@@ -56,7 +56,7 @@ def _get_session():
     retry_strategy = Retry(
         total=10,
         backoff_factor=1,  # 1s, 2s, 4s задержки
-        status_forcelist=[429, 500, 502, 503, 504],
+        status_forcelist=[429, 502, 503, 504],
     )
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("http://", adapter)
@@ -95,7 +95,6 @@ def _get_session():
         raise ValueError("Нет access_token в ответе!")
         
     session.headers.update({
-        'Content-Type': 'application/json',
         'Authorization': f'Bearer {token}',
         'Accept': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -157,38 +156,54 @@ def upload_seafarer_photo(seafarer_uuid: str, photo: dict[str, any]) -> dict[str
     if not photo or not photo.get("file_obj"):
         return {"status": "no photo"}
     
-    session = requests.Session()
-    login_data = {
-            "email": os.getenv("CREWING_EMAIL"),
-            "password": os.getenv("CREWING_PASSWORD"),
-            "forced": True
-        }
-
-    headers = {'Content-Type': 'application/json'} 
-    login_response = session.post(
-                f'{API_BASE_URL}/auth/login', 
-                json=login_data, 
-                headers=headers
-            )
-    login_response.raise_for_status() 
-    token = login_response.json().get("access_token")
-    
+    session = _get_session()  # Кэшированная сессия с токеном
     url = f'{API_BASE_URL}/seafarers/{seafarer_uuid}/main'
 
     photo["file_obj"].seek(0)
-    payload = {"data": '{"photo":{"fileRef":"A"}}'}
-    
-    files=[
-        ('A',(photo.get("filename", "photo.jpg"), photo["file_obj"], photo.get("mime_type", "image/jpeg")))
-        ]
-    headers = {
-    'Authorization': f'Bearer {token}', 
-        }
-    response = requests.request("PUT", url, headers=headers, data=payload, files=files)
+    payload = {"data": json.dumps({"photo": {"fileRef": "A"}})}
+    files = [
+        (
+            'A',
+            (
+                photo.get("filename", "photo.jpg"),
+                photo["file_obj"],
+                photo.get("mime_type", "image/jpeg")
+            )
+        )
+    ]
+
+    # multipart request must not reuse a JSON-only Content-Type header
+    request_headers = {
+        "Accept": "application/json"
+    }
+
+    logger.debug(
+        "upload_seafarer_photo request: url=%s, filename=%s, mime_type=%s, payload=%s",
+        url,
+        photo.get("filename", "photo.jpg"),
+        photo.get("mime_type", "image/jpeg"),
+        payload,
+    )
+
+    request = requests.Request(
+        "PUT",
+        url,
+        data=payload,
+        files=files,
+        headers=request_headers,
+    )
+    prepared = session.prepare_request(request)
+    logger.debug("upload_seafarer_photo prepared headers: %s", dict(prepared.headers))
+
+    response = session.send(prepared, timeout=API_TIMEOUT)
     logger.debug("Response status: %s", response.status_code)
     logger.debug("Response text: %s", response.text)
-    response.raise_for_status()
-    return response.json() 
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError:
+        logger.error("upload_seafarer_photo failed: %s %s", response.status_code, response.text)
+        raise
+    return response.json()
  
  
 # ********************  
@@ -373,33 +388,47 @@ def simple_cleaned_vessel_name(raw_vessel_name):
     return raw_vessel_name.replace('mv ','',1).replace('Mv/','',1)
 
 def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
-    
-    name_and_flag = contract_details.get('Vessel Name / Flag', None)
-    
+    name_and_flag = contract_details.get('Vessel Name / Flag')
+    if not name_and_flag:
+        raise ValueError("Missing Vessel Name / Flag in historical contract entry")
+
+    if ' / ' not in name_and_flag:
+        raise ValueError("Unsupported Vessel Name / Flag format: %r" % name_and_flag)
+
     name = simple_cleaned_vessel_name(name_and_flag.rsplit(' / ',1)[0].strip()).upper()
-    
     flag_country = name_and_flag.rsplit(' / ',1)[1].strip()
-    
-    # flag_country_id = search_geo(flag_country)[0]['id'] if search_geo(flag_country) else search_geo(flag_country.replace('ksa','Saudi Arabia').replace('uae','United Arab Emirates'))
-    flag_country_id = search_geo(flag_country)[0]['id'] if search_geo(flag_country) else search_geo(get_value(flag_country))
-    
-    vessel_type = contract_details.get('Vessel type / DWT', None).rsplit(' / ',1)[0].strip()
-    type_id = get_id(local_vessel_types, vessel_type, 'vessel_types')
-    
-    # дописать добавление инфы: DWT,ME_type / kW, Shipowner / Country
+
+    flag_search = search_geo(flag_country)
+    if flag_search:
+        flag_country_id = flag_search[0]['id']
+    else:
+        mapped_flag = get_value(flag_country)
+        if not mapped_flag:
+            raise ValueError("Unable to resolve vessel flag country: %r" % flag_country)
+        flag_search = search_geo(mapped_flag)
+        flag_country_id = flag_search[0]['id'] if flag_search else None
+
+    if flag_country_id is None:
+        raise ValueError("Unable to resolve flag country id for: %r" % flag_country)
+
+    vessel_type = contract_details.get('Vessel type / DWT')
+    if not vessel_type or ' / ' not in vessel_type:
+        raise ValueError("Missing or unsupported Vessel type / DWT format: %r" % vessel_type)
+
+    type_id = get_id(local_vessel_types, vessel_type.rsplit(' / ',1)[0].strip(), 'vessel_types')
+    if type_id is None:
+        raise ValueError("Unable to resolve vessel type id for: %r" % vessel_type)
 
     session = _get_session()
-    
     url = f'{API_BASE_URL}/vessels/historical'
-    
     payload = {
-        "name":name,
-        "imo_no":'No info',
-        "type_id":type_id,
-        "gt":1,
-        "flag_country_id":flag_country_id
-        }
-    
+        "name": name,
+        "imo_no": 'No info',
+        "type_id": type_id,
+        "gt": 1,
+        "flag_country_id": flag_country_id
+    }
+
     response = session.post(url, json=payload)
     logger.debug("Response status: %s", response.status_code)
     logger.debug("Response text: %s", response.text)
@@ -450,43 +479,86 @@ def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
 # для одного запроса работает
 def add_historical_contract(sea_service:dict, seafarer_uuid:str, ranks, local_vessel_types):
     """Добавляет данные о контракте на 360Crew API"""
-    # блок вычисления переменных
-    rank_id= get_id(ranks, sea_service.get('Position'),'ranks')
-    
-    uuid_and_source = get_vessel_uuid(simple_cleaned_vessel_name(sea_service.get('Vessel Name / Flag')))
-    
-    uuid = uuid_and_source[0] if uuid_and_source else _add_new_vessel(sea_service,local_vessel_types)
-    source = uuid_and_source[1] if uuid_and_source else 'historical'
-    
-    sign_on_date = extract_date_to_iso(sea_service.get('From - Till').split('-')[0].strip())[0]
-    sign_off_date = extract_date_to_iso(sea_service.get('From - Till').split('-')[1].strip())[0]
-    
-    session = _get_session()  
-    
+    rank_id = get_id(ranks, sea_service.get('Position'), 'ranks')
+    if not rank_id:
+        raise ValueError("Missing rank_id for historical contract position: %s" % sea_service.get('Position'))
+
+    raw_vessel_name = sea_service.get('Vessel Name / Flag')
+    cleaned_vessel_name = simple_cleaned_vessel_name(raw_vessel_name) if raw_vessel_name else None
+
+    if cleaned_vessel_name:
+        vessel_uuid, source, _ = get_vessel_uuid(cleaned_vessel_name)
+    else:
+        vessel_uuid, source = None, 'historical'
+
+    if source != 'historical':
+        logger.debug(
+            "Historical contract vessel lookup returned non-historical source=%s; creating historical vessel",
+            source,
+        )
+        vessel_uuid = None
+        source = 'historical'
+
+    if not vessel_uuid:
+        created_vessel = _add_new_vessel(sea_service, local_vessel_types)
+        vessel_uuid = created_vessel.get('inserted', {}).get('uuid') or created_vessel.get('uuid') or created_vessel.get('id')
+        source = source or 'historical'
+
+    if not vessel_uuid:
+        raise ValueError("Unable to resolve or create vessel UUID for historical contract")
+
+    contract_period = sea_service.get('From - Till')
+    if not contract_period or not isinstance(contract_period, str):
+        raise ValueError("Missing or invalid From - Till value: %r" % contract_period)
+
+    period_parts = [part.strip() for part in re.split(r'\s*[-–—]\s*', contract_period, maxsplit=1) if part.strip()]
+    if len(period_parts) < 2:
+        raise ValueError("Unable to split From - Till into two dates: %r" % contract_period)
+
+    sign_on_date_raw = extract_date_to_iso(period_parts[0])
+    sign_off_date_raw = extract_date_to_iso(period_parts[1])
+    sign_on_date = sign_on_date_raw[0] if sign_on_date_raw else None
+    sign_off_date = sign_off_date_raw[0] if sign_off_date_raw else None
+
+    if not sign_on_date or not sign_off_date:
+        raise ValueError(
+            "Unable to parse contract dates from From - Till: %r (on=%r off=%r)"
+            % (contract_period, sign_on_date, sign_off_date)
+        )
+
+    if not raw_vessel_name:
+        raise ValueError("Missing Vessel Name / Flag for historical contract entry")
+
+    session = _get_session()
     url = f'{API_BASE_URL}/contracts/historical'
-    
+
     payload = {
-        "is_historical":True,
-        "seafarer_uuid":seafarer_uuid,
-        "rank_id":rank_id,
-        "vessel":
-                    {
-                        "uuid":uuid,
-                        "source":source
-                    },
-                
+        "is_historical": True,
+        "seafarer_uuid": seafarer_uuid,
+        "rank_id": rank_id,
+        "vessel": {
+            "uuid": vessel_uuid,
+            "source": source
+        },
         "is_automatic": True,
-        "sign_on_date":sign_on_date,
-        "sign_off_date":sign_off_date,
-        "off_reason_id":0,
-        "is_historical":1,
-        "details": "STRING"
-        
-        }
-    # print(payload)  
+        "sign_on_date": sign_on_date,
+        "sign_off_date": sign_off_date,
+        "off_reason_id": 0,
+        "is_historical": 1,
+        "details": "Imported from CV"
+    }
+
+    logger.debug("Posting historical contract: %s", payload)
+
     response = session.post(url, json=payload)
-    # print(response.status_code)
-    # print(response.text)
+    if response.status_code >= 400:
+        logger.error(
+            "Historical contract failed (%s): status=%s text=%s payload=%s",
+            url,
+            response.status_code,
+            response.text,
+            payload,
+        )
     response.raise_for_status()
     return response.json()
 
