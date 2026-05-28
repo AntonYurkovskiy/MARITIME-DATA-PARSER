@@ -15,6 +15,27 @@ ALMOST_EMPTY_HTML = "almost_empty.html"
 EDGE_HTML = "edge_case.html" 
 GOLDEN_JSON = "golden_cv.json"
 
+REQUIRED_SECTIONS = [
+    "Main info",
+    "Passports / Smbk",
+    "Diplomas",
+    "Certificates",
+    "Sea service (last 5 years)",
+    "Biometrics",
+    "Additional info",
+]
+
+BIOMETRICS_KEYS = ["Sex", "Height", "Overall size", "Eyes color", "Weight", "Shoe size"]
+
+SEA_SERVICE_KEYS = [
+    "Position",
+    "Vessel Name / Flag",
+    "Vessel type / DWT",
+    "ME Type / kW",
+    "From - Till",
+    "Shipowner / Country",
+]
+
 
 def _parse_fixture(html_name: str):
     """Вспомогательная функция: читает HTML из fixtures и прогоняет через main_parser."""
@@ -26,6 +47,16 @@ def _parse_fixture(html_name: str):
 def _load_golden(name: str):
     """Чтение golden JSON из fixtures."""
     return json.loads((FIXTURES_DIR / name).read_text(encoding="utf-8"))
+
+
+def _assert_sections_present(result: dict, sections: list[str]):
+    for section in sections:
+        assert section in result
+
+
+def _assert_keys_present(mapping: dict, keys: list[str]):
+    for key in keys:
+        assert key in mapping
 
 
 def test_full_main_parser():
@@ -51,10 +82,7 @@ def test_main_parser_edge_masked_and_single_service():
 
     # 1. Базовая структура
     assert isinstance(result, dict)
-    for section in ["Main info", "Passports / Smbk", "Diplomas",
-                    "Certificates", "Sea service (last 5 years)",
-                    "Biometrics", "Additional info"]:
-        assert section in result
+    _assert_sections_present(result, REQUIRED_SECTIONS)
 
     main_info = result["Main info"]
     sea = result["Sea service (last 5 years)"]
@@ -71,19 +99,11 @@ def test_main_parser_edge_masked_and_single_service():
     assert isinstance(sea, list)
     assert len(sea) == 1
     row = sea[0]
-    for key in [
-        "Position",
-        "Vessel Name / Flag",
-        "Vessel type / DWT",
-        "ME Type / kW",
-        "From - Till",
-        "Shipowner / Country",
-    ]:
-        assert key in row
+    _assert_keys_present(row, SEA_SERVICE_KEYS)
 
     # 4. Biometrics полностью заполнен
-    for key in ["Sex", "Height", "Overall size", "Eyes color", "Weight", "Shoe size"]:
-        assert key in biom
+    _assert_keys_present(biom, BIOMETRICS_KEYS)
+    for key in BIOMETRICS_KEYS:
         assert biom[key] != ""
 
     # 5. В Additional info не потерялся навык
