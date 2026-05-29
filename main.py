@@ -1,44 +1,42 @@
-# import dotenv
-# Работа с сервером
-# import requests
-from pprint import pprint
-import json
-
-# Распаковка и парсинг
-import zipfile
-import pandas as pd
-import io
-from bs4 import BeautifulSoup
-from datetime import datetime
-
-
-from urllib.parse import urljoin, urlparse
-import os
-import shutil
-import base64
 import importlib
-import re
-
+import logging
 from pathlib import Path
-from dotenv import load_dotenv
-import phonenumbers
-
 
 import functions
-import importlib
+from config import INPUT_DIR
+
 importlib.reload(functions)
 
 from functions import (
-        get_html_content, main_parser, parse_notes, get_names, extract_date_to_iso,
-        get_emails_list, get_id, get_personal_id_by_passport, get_ranks, search_geo,
-        get_languages, country_to_language, get_resident_country, get_phones,
-        build_seafarer_dict, add_seafarer, upload_seafarer_photo, add_historical_contract,
-        get_dict
-    )
+    add_historical_contract,
+    add_seafarer,
+    build_seafarer_dict,
+    country_to_language,
+    extract_date_to_iso,
+    get_dict,
+    get_emails_list,
+    get_html_content,
+    get_id,
+    get_names,
+    get_personal_id_by_passport,
+    get_languages,
+    get_phones,
+    get_ranks,
+    get_resident_country,
+    main_parser,
+    parse_notes,
+    search_geo,
+    upload_seafarer_photo,
+)
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 
 def load_reference_data():
-    
-
     ranks = get_dict("ranks")
     gender = get_dict("gender")
     marital_statuses = get_dict("marital_statuses")
@@ -50,77 +48,102 @@ def load_reference_data():
 
 
 def process_all_files(html_files, ranks, gender, marital_statuses, resident_statuses, languages, vessel_types):
-    
+    success_count = 0
+    error_count = 0
 
-    for file in html_files:
-        soup = get_html_content(file)
-        main_info = main_parser(soup)
-        notes = parse_notes(soup)
+    for idx, file in enumerate(html_files, 1):
+        try:
+            logger.info("📄 Обработка файла %d/%d: %s", idx, len(html_files), file)
 
-        name, middle_name, surname = get_names(main_info["Main info"]["Name / Surname:"])
-        date_of_birth, place_of_birth = extract_date_to_iso(main_info["Main info"]["Birthday / Place of birth:"])
-        emails = get_emails_list(main_info["Main info"]["E-mail:"])
-        gender_id = get_id(gender, main_info["Biometrics"]["Sex"], "gender")
-        personal_id = get_personal_id_by_passport(main_info["Passports / Smbk"])
-        positions = get_ranks(main_info["Main info"]["Position applied for:"])
+            soup = get_html_content(file)
+            main_info = main_parser(soup)
+            notes = parse_notes(soup)
 
-        rank_id = get_id(ranks, positions[0], "ranks")
-        additional_ranks = [get_id(ranks, rank, "ranks") for rank in positions[1:]]
-        nationality_country_id = search_geo(main_info["Main info"]["Citizenship:"], "countries")[0]["id"]
+            name, middle_name, surname = get_names(main_info["Main info"]["Name / Surname:"])
+            date_of_birth, place_of_birth = extract_date_to_iso(main_info["Main info"]["Birthday / Place of birth:"])
+            emails = get_emails_list(main_info["Main info"]["E-mail:"])
 
-        languages_list = get_languages(main_info["Additional info"]["Knowledge of other languages:"])
-        language_id = ([get_id(languages, language, "languages") for language in languages_list] if languages_list else [])[0]
-        language_id_by_citizenship = get_id(languages, country_to_language(main_info["Main info"]["Citizenship:"]), "languages")
+            gender_id = get_id(gender, main_info["Biometrics"]["Sex"], "gender")
+            personal_id = get_personal_id_by_passport(main_info["Passports / Smbk"])
+            positions = get_ranks(main_info["Main info"]["Position applied for:"])
+            rank_id = get_id(ranks, positions[0], "ranks")
+            additional_ranks = [get_id(ranks, rank, "ranks") for rank in positions[1:]]
 
-        resident_country = get_resident_country(
-            main_info["Main info"]["Country of residence / City:"],
-            main_info["Main info"]["Citizenship:"]
-        )
-        geo_resident = search_geo(resident_country, "countries")
-        resident_country_id = geo_resident[0]["id"] if geo_resident else None
+            nationality_country = search_geo(main_info["Main info"]["Citizenship:"], "countries")
+            nationality_country_id = nationality_country[0]["id"] if nationality_country else ""
 
-        next_of_kin = main_info["Additional info"]["Next of kin:"]
-        marital_status = "Married" if next_of_kin == "Wife" else None
-        marital_status_id = get_id(marital_statuses, marital_status, "marital_statuses")
+            languages_list = get_languages(main_info["Additional info"]["Knowledge of other languages:"])
+            language_id = ([get_id(languages, language, "languages") for language in languages_list] if languages_list else [])[0]
+            language_id_by_citizenship = get_id(languages, country_to_language(main_info["Main info"]["Citizenship:"]), "languages")
 
-        phones = main_info["Main info"]["Phones:"]
-        phones_list_of_dicts = get_phones(phones, resident_country_id, nationality_country_id, search_geo)
+            resident_country = get_resident_country(
+                main_info["Main info"]["Country of residence / City:"],
+                main_info["Main info"]["Citizenship:"],
+            )
+            geo_resident = search_geo(resident_country, "countries")
+            resident_country_id = geo_resident[0]["id"] if geo_resident else None
 
-        result = build_seafarer_dict(
-            soup,
-            name,
-            middle_name,
-            surname,
-            rank_id,
-            additional_ranks,
-            date_of_birth,
-            place_of_birth,
-            gender_id,
-            marital_status_id,
-            nationality_country_id,
-            emails,
-            resident_country_id,
-            notes,
-            phones_list_of_dicts,
-            personal_id[0],
-            language_id_by_citizenship
-        )
+            next_of_kin = main_info["Additional info"]["Next of kin:"]
+            marital_status = "Married" if next_of_kin == "Wife" else None
+            marital_status_id = get_id(marital_statuses, marital_status, "marital_statuses")
 
-        photo = result.pop("photo", None)
-        created = add_seafarer(result)
-        seafarer_uuid = created["inserted"]["uuid"]
+            phones = main_info["Main info"]["Phones:"]
+            phones_list_of_dicts = get_phones(phones, resident_country_id, nationality_country_id, search_geo)
 
-        for item in main_info["Sea service (last 5 years)"]:
-            add_historical_contract(item, seafarer_uuid, ranks, vessel_types)
+            result = build_seafarer_dict(
+                soup,
+                name,
+                middle_name,
+                surname,
+                rank_id,
+                additional_ranks,
+                date_of_birth,
+                place_of_birth,
+                gender_id,
+                marital_status_id,
+                nationality_country_id,
+                emails,
+                resident_country_id,
+                notes,
+                phones_list_of_dicts,
+                personal_id[0],
+                language_id_by_citizenship,
+            )
 
-        upload_seafarer_photo(seafarer_uuid, photo)
+            photo = result.pop("photo", None)
+            created = add_seafarer(result)
+            seafarer_uuid = created["inserted"]["uuid"]
+            logger.info("✅ Моряк создан: %s %s (uuid: %s)", name, surname, seafarer_uuid)
+
+            try:
+                contract_count = len(main_info["Sea service (last 5 years)"])
+                logger.info("📋 Добавляем %d контрактов...", contract_count)
+                for item in main_info["Sea service (last 5 years)"]:
+                    add_historical_contract(item, seafarer_uuid, ranks, vessel_types)
+                logger.info("✅ %d контрактов добавлено", contract_count)
+            except Exception as e:
+                logger.warning("⚠️ Ошибка при добавлении контрактов: %s", e)
+
+            try:
+                upload_seafarer_photo(seafarer_uuid, photo)
+                logger.info("📷 Фото загружено")
+            except Exception as e:
+                logger.warning("⚠️ Ошибка при загрузке фото: %s", e)
+
+            success_count += 1
+        except Exception as e:
+            error_count += 1
+            logger.error("❌ Ошибка при обработке файла %s: %s", file, e)
+            continue
+
+    logger.info("%s", "=" * 50)
+    logger.info("📊 ИТОГО: успешно %d, ошибок %d", success_count, error_count)
 
 
 def main():
     ranks, gender, marital_statuses, resident_statuses, languages, vessel_types = load_reference_data()
 
-    PATH = "out/out_min"
-    html_files = [str(p) for p in Path(PATH).rglob("*.html")]
+    html_files = [str(p) for p in Path(INPUT_DIR).rglob("*.html")]
 
     process_all_files(html_files, ranks, gender, marital_statuses, resident_statuses, languages, vessel_types)
 
