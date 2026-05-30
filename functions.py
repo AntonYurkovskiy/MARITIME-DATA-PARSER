@@ -36,7 +36,7 @@ import difflib
 
 import rapidfuzz
 from rapidfuzz import fuzz, process, utils
-from src.utils.mapping import get_value, set_value, update_mapping
+from src.utils.mapping import get_value, load_mapping, set_value, update_mapping
 from src.config import API_BASE_URL, API_TIMEOUT
 import logging
 
@@ -1123,6 +1123,13 @@ def get_emails_list(email_string):
 # ****************************************
 
 # ПОЛУЧЕНИЕ СТРАНЫ ПРОЖИВАНИЯ
+
+# COUNTRY_TO_LANGUAGE  = Path(__file__).parent / 'data' / 'country_to_language.json'
+# with open(COUNTRY_TO_LANGUAGE, 'r') as f:
+#     COUNTRY_TO_LANGUAGE = json.load(f)
+
+COUNTRY_TO_LANGUAGE = load_mapping((Path(__file__).parent / 'data' / 'country_to_language.json'))
+
 def get_resident_country(search_term: str, citizenship: str):
     
     if search_term:
@@ -1274,97 +1281,6 @@ def get_languages(languages):
     lang_list = re.split(r', |/', languages)
     return [part.split(' ',1)[0] if ' ' in part else part for part in lang_list]
 
-
-COUNTRY_TO_LANGUAGE = {
-    # Восточная Европа / СНГ
-    "Russia": "Russian",
-    "Russian Federation": "Russian", 
-    "Ukraine": "Ukrainian",
-    "Belarus": "Belarusian",
-    "Kazakhstan": "Kazakh",
-    "Uzbekistan": "Uzbek",
-    "Kyrgyzstan": "Kyrgyz",
-    "Tajikistan": "Tajik",
-    "Turkmenistan": "Turkmen",
-    "Armenia": "Armenian",
-    "Azerbaijan": "Azerbaijani",
-    "Georgia": "Georgian",
-    
-    # Западная Европа
-    "Germany": "German",
-    "France": "French", 
-    "Italy": "Italian",
-    "Spain": "Spanish",
-    "Portugal": "Portuguese",
-    "Netherlands": "Dutch",
-    "Belgium": "Dutch",
-    "Austria": "German",
-    "Switzerland": "German",
-    
-    # Восточная Европа
-    "Poland": "Polish",
-    "Czech Republic": "Czech",
-    "Slovakia": "Slovak",
-    "Hungary": "Hungarian",
-    "Romania": "Romanian",
-    "Bulgaria": "Bulgarian",
-    "Serbia": "Serbian",
-    "Croatia": "Croatian",
-    "Bosnia and Herzegovina": "Serbian",
-    "Slovenia": "Slovenian",
-    "North Macedonia": "Macedonian",
-    "Albania": "Albanian",
-    "Montenegro": "Montenegrin",
-    "Moldova": "Romanian",
-    
-    # Прибалтика
-    "Lithuania": "Lithuanian",
-    "Latvia": "Latvian",
-    "Estonia": "Estonian",
-    
-    # Скандинавия
-    "Sweden": "Swedish",
-    "Norway": "Norwegian", 
-    "Denmark": "Danish",
-    "Finland": "Finnish",
-    "Iceland": "Icelandic",
-    
-    # Другие
-    "Greece": "Greek",
-    "Turkey": "Turkish",
-    "Cyprus": "Greek",
-    "Malta": "Maltese",
-    "United Kingdom": "English",
-    "Ireland": "Irish",
-    
-    # Америка
-    "USA": "English",    
-    "United States": "English",
-    "Canada": "English",
-    "Mexico": "Spanish",
-    "Brazil": "Portuguese",
-    "Argentina": "Spanish",
-    "Chile": "Spanish",
-    
-    # Азия
-    "China": "Chinese",
-    "Japan": "Japanese",
-    "South Korea": "Korean",
-    "India": "Hindi",
-    "Indonesia": "Indonesian",
-    "Philippines": "Filipino",
-    "Thailand": "Thai",
-    "Vietnam": "Vietnamese",
-    "Malaysia": "Malay",
-    
-    # Ближний Восток / Африка
-    "Israel": "Hebrew",
-    "Saudi Arabia": "Arabic",
-    "Egypt": "Arabic",
-    "Morocco": "Arabic",
-    "South Africa": "English",
-    "Nigeria": "English",
-}
 
 def country_to_language(country: str) -> Optional[str]:
     """Страна → язык (case-insensitive)"""

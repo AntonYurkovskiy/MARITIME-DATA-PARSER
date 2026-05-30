@@ -1,0 +1,89 @@
+{
+    
+    "Russia": "Russian",
+    "Russian Federation": "Russian", 
+    "Ukraine": "Ukrainian",
+    "Belarus": "Belarusian",
+    "Kazakhstan": "Kazakh",
+    "Uzbekistan": "Uzbek",
+    "Kyrgyzstan": "Kyrgyz",
+    "Tajikistan": "Tajik",
+    "Turkmenistan": "Turkmen",
+    "Armenia": "Armenian",
+    "Azerbaijan": "Azerbaijani",
+    "Georgia": "Georgian",
+    
+    
+    "Germany": "German",
+    "France": "French", 
+    "Italy": "Italian",
+    "Spain": "Spanish",
+    "Portugal": "Portuguese",
+    "Netherlands": "Dutch",
+    "Belgium": "Dutch",
+    "Austria": "German",
+    "Switzerland": "German",
+    
+    
+    "Poland": "Polish",
+    "Czech Republic": "Czech",
+    "Slovakia": "Slovak",
+    "Hungary": "Hungarian",
+    "Romania": "Romanian",
+    "Bulgaria": "Bulgarian",
+    "Serbia": "Serbian",
+    "Croatia": "Croatian",
+    "Bosnia and Herzegovina": "Serbian",
+    "Slovenia": "Slovenian",
+    "North Macedonia": "Macedonian",
+    "Albania": "Albanian",
+    "Montenegro": "Montenegrin",
+    "Moldova": "Romanian",
+    
+    
+    "Lithuania": "Lithuanian",
+    "Latvia": "Latvian",
+    "Estonia": "Estonian",
+    
+    
+    "Sweden": "Swedish",
+    "Norway": "Norwegian", 
+    "Denmark": "Danish",
+    "Finland": "Finnish",
+    "Iceland": "Icelandic",
+    
+    
+    "Greece": "Greek",
+    "Turkey": "Turkish",
+    "Cyprus": "Greek",
+    "Malta": "Maltese",
+    "United Kingdom": "English",
+    "Ireland": "Irish",
+    
+    
+    "USA": "English",    
+    "United States": "English",
+    "Canada": "English",
+    "Mexico": "Spanish",
+    "Brazil": "Portuguese",
+    "Argentina": "Spanish",
+    "Chile": "Spanish",
+    
+    
+    "China": "Chinese",
+    "Japan": "Japanese",
+    "South Korea": "Korean",
+    "India": "Hindi",
+    "Indonesia": "Indonesian",
+    "Philippines": "Filipino",
+    "Thailand": "Thai",
+    "Vietnam": "Vietnamese",
+    "Malaysia": "Malay",
+    
+    "Israel": "Hebrew",
+    "Saudi Arabia": "Arabic",
+    "Egypt": "Arabic",
+    "Morocco": "Arabic",
+    "South Africa": "English",
+    "Nigeria": "English"
+}
