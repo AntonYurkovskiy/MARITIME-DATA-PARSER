@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 
 import functions
-from config import INPUT_DIR
+from src.config import INPUT_DIR
 
 importlib.reload(functions)
 

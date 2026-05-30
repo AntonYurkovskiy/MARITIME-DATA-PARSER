@@ -36,8 +36,8 @@ import difflib
 
 import rapidfuzz
 from rapidfuzz import fuzz, process, utils
-from mapping_utils import get_value, set_value, update_mapping
-from config import API_BASE_URL, API_TIMEOUT
+from src.utils.mapping import get_value, set_value, update_mapping
+from src.config import API_BASE_URL, API_TIMEOUT
 import logging
 
 load_dotenv()
