@@ -40,6 +40,15 @@ from src.utils.mapping import get_value, load_mapping, set_value, update_mapping
 from src.config import API_BASE_URL, API_TIMEOUT
 import logging
 
+from src.utils.validators import (
+    _normalize,
+    simple_cleaned_vessel_name,
+    text_cleaning,
+    only_letters_regex,
+    clean_letters_commas,
+    find_emails,
+    only_letters_digits_spaces)
+
 load_dotenv()
 logger = logging.getLogger(__name__)
 
@@ -269,14 +278,8 @@ def _get_vessel_name(item):
         or item.get("imo_no")
         or ""
     )
-    
-def _normalize(text: str) -> str:
-    
-    text = text.lower()
-    text = re.sub(r"[^a-z0-9\s]", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
-
+# def _normalize(text: str) -> str: ------>>>> .\srs\utils\validators.py  
+  
 def _name_variants(vessel_name: str):
     parts = _normalize(vessel_name).split()
 
@@ -384,8 +387,8 @@ def get_vessel_uuid(vessel_name: str):
 
     return None, None, None
 
-def simple_cleaned_vessel_name(raw_vessel_name):
-    return raw_vessel_name.replace('mv ','',1).replace('Mv/','',1)
+# def simple_cleaned_vessel_name(raw_vessel_name): ------>>>> .\srs\utils\validators.py
+
 
 def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
     name_and_flag = contract_details.get('Vessel Name / Flag')
@@ -435,45 +438,6 @@ def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
     response.raise_for_status()
     return response.json()
 
-
-# def get_internal_id()
-    
-# все в одном запросе не работает
-# def add_historical_contracts(sea_service:list[dict], seafarer_uuid:str, ranks, position):
-#     """Добавляет данные о контракте на 360Crew API"""
-#     session = _get_session()  
-    
-#     url = f'{API_BASE_URL}/contracts/historical'
-    
-#     payload = {
-#         "is_historical":True,
-#         "seafarer_uuid":seafarer_uuid,
-#         "rank_id":get_id(ranks, position,'ranks'),
-#         "joinings":[
-#             {
-#                 "rank_id":get_id(ranks, item.get('Position'),'ranks'),
-                
-#                 "vessel":
-#                     {
-#                         "uuid":get_vessel_uuid(simple_cleaned_vessel_name(item.get('Vessel Name / Flag')))[0],
-#                         "source":get_vessel_uuid(simple_cleaned_vessel_name(item.get('Vessel Name / Flag')))[1]
-#                     },
-                
-#                 "is_automatic": True,
-#                 "sign_on_date":extract_date_to_iso(item.get('From - Till').split('-')[0].strip())[0],
-#                 "sign_off_date":extract_date_to_iso(item.get('From - Till').split('-')[1].strip())[0],
-#                 "off_reason_id":0,
-#                 "is_historical":1,
-#                 "details": "STRING"
-#                 } for item in sea_service
-#             ]
-#         }
-#     print(payload)  
-#     response = session.post(url, json=payload)
-#     print(response.status_code)
-#     print(response.text)
-#     response.raise_for_status()
-#     return response.json()
 
 
 # для одного запроса работает
@@ -690,10 +654,7 @@ def search_geo_dict(geo_type: str = "countries") -> list:#search_term: str, geo_
             return data
         else:
             logger.warning("❌ Ошибка поиска: %s", response.text)
-# получение ID
-# def get_id(dictionary,key):
-#     id = next((item['id'] for item in dictionary if item['value'].lower() == key.lower()), None)
-#     return id if id else _add_value_in_dict(key,dictionary)['inserted']['id']
+
 
 
 def get_id(dictionary, value, dict_name: str):
@@ -857,17 +818,7 @@ def get_photo(soup, save_dir="out_manual", filename="photo.jpg"):
 
 
 # ОЧИСТКА ТЕКСТА
-def text_cleaning(raw_text):
-    """очищает текст от непечатаемых спец символов
-
-    Args:
-        raw_text (str): неочищенная строка
-
-    Returns:
-        str: очищенная строка
-    """
-    text = re.sub(r'[^\x20-\x7Eа-яА-ЯёЁ\s]+|\s+', ' ', raw_text.strip())
-    return text
+# def text_cleaning(raw_text): ------------------->>>> .\srs\utils\validators.py
 
 # ОСНОВНОЙ ПАРСЕР 
 def main_parser(soup):
@@ -990,9 +941,8 @@ def parse_notes(soup):
 # =========================
 
 # вернуть только буквы
-def only_letters_regex(text):
-    result = re.sub(r'[^а-яА-ЯёЁa-zA-Z]', '', text) if text else None
-    return result if result else None
+# def only_letters_regex(text):------------------->>>> .\srs\utils\validators.py
+
 
 # Разделить ФИО
 def get_names(names_string):
@@ -1014,35 +964,7 @@ def get_birth_day_place(birth_day_place_string):
     return day, place
 
 # очистка текста
-def clean_letters_commas(text):    
-    """
-    Оставляет только буквы и запятые:
-    - Удаляет пробелы после букв и перед запятыми
-    - После запятых оставляет 1 пробел
-    """
-    # Проверка на пустую строку
-    if not text:                   
-        return None                 
-    
-    # Этап 1: Оставляем ТОЛЬКО буквы, запятые и пробелы
-    text = re.sub(r'[^а-яА-ЯёЁa-zA-Z,\s]', '', text)
-         
-    # Этап 2: Удаляем пробелы перед запятыми (, )
-    text = re.sub(r'\s+,', ',', text)
-        
-    # Этап 3: Удаляем пробелы после букв перед запятыми (буква ,)
-    text = re.sub(r'([а-яА-ЯёЁa-zA-Z]),', r'\1,', text)
-      
-    # Этап 4: После запятых → 1 пробел (если нет пробела)
-    text = re.sub(r',([^ ])', r', \1', text)
-                                   
-    # Этап 5: Удаляем множественные пробелы
-    text = re.sub(r'\s+', ' ', text)
-    
-    # Этап 6: Удаляем пробелы в начале/конце
-    result = text.strip()
-    
-    return result if result else None 
+# def clean_letters_commas(text):------------------->>>> .\srs\utils\validators.py
 
 # Главная функция: извлечь дату и вернуть ISO
 def extract_date_to_iso(text):     
@@ -1099,9 +1021,7 @@ def extract_date_to_iso(text):
 
 # ****************************************
 # поиск всех емейлов
-def find_emails(text):
-    pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-    return re.findall(pattern, text)
+# def find_emails(text):------------------->>>> .\srs\utils\validators.py
 
 def get_emails_list(email_string):
     """Из строки с емейлами делает словарь по форме 
@@ -1243,24 +1163,11 @@ def get_phones(phones: str, resident_country_id, nationality_country_id, search_
     return items
 
 # ****************************************
+# def only_letters_digits_spaces(text:str) -> bool:------------------->>>> .\srs\utils\validators.py
+
+# def only_digits_spaces_plus_minus(text):------------------->>>> .\srs\utils\validators.py
+
                               
-def only_letters_digits_spaces(text:str) -> bool:
-    """Проверяет: только буквы, цифры, пробелы"""
-    if not text:
-        return False
-    # ^ начало, $ конец, [] любой из символов
-    pattern = r'^[а-яА-ЯёЁa-zA-Z0-9\s]+$'
-    return bool(re.match(pattern, text.strip()))
-
-def only_digits_spaces_plus_minus(text):
-    """Проверяет: только цифры, пробелы, плюсы, минусы"""
-    if not text:                   # Пустая строка → False
-        return False
-    # ^ начало, $ конец, [] любой из символов
-    pattern = r'^[0-9+\-\s]+$'
-    return bool(re.match(pattern, text))#.strip()))
-
-
 def get_personal_id_by_passport(pasports_list_of_dicts):
     priority_docs = ['International passport', 'National passport', "Seaman's book"]
     
