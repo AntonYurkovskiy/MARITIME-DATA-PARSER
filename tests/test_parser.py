@@ -2,9 +2,7 @@ from bs4 import BeautifulSoup
 from pathlib import Path
 import json
 
-# прописать правильно модуль откуда импорт производить 
-# как только будет изменен
-from functions import main_parser
+from src.parsers.html import main_parser
 
 
 TESTS_DIR = Path(__file__).parent
