@@ -4,6 +4,12 @@ from pathlib import Path
 
 import functions
 from src.config import INPUT_DIR
+from src.extractors.dates import extract_date_to_iso
+from src.extractors.documents import get_personal_id_by_passport, get_ranks
+from src.extractors.emails import get_emails_list
+from src.extractors.names import get_names
+from src.extractors.phones import get_phones
+from src.parsers.html import get_html_content, main_parser, parse_notes
 
 importlib.reload(functions)
 
@@ -12,19 +18,10 @@ from functions import (
     add_seafarer,
     build_seafarer_dict,
     country_to_language,
-    extract_date_to_iso,
     get_dict,
-    get_emails_list,
-    get_html_content,
     get_id,
-    get_names,
-    get_personal_id_by_passport,
     get_languages,
-    get_phones,
-    get_ranks,
     get_resident_country,
-    main_parser,
-    parse_notes,
     search_geo,
     upload_seafarer_photo,
 )

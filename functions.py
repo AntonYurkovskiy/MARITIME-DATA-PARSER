@@ -10,15 +10,11 @@ import json
 # Распаковка и парсинг
 import zipfile
 import pandas as pd
-import io
-from bs4 import BeautifulSoup
-from datetime import datetime
 
 
 from urllib.parse import urljoin, urlparse
 import os
 import shutil
-import base64
 import re
 
 from functools import lru_cache
@@ -28,7 +24,6 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from typing import Optional
-import phonenumbers
 
 from pathlib import Path
 
@@ -36,6 +31,8 @@ import difflib
 
 import rapidfuzz
 from rapidfuzz import fuzz, process, utils
+from src.extractors.dates import extract_date_to_iso
+from src.parsers.photo import get_photo
 from src.utils.mapping import get_value, load_mapping, set_value, update_mapping
 from src.config import API_BASE_URL, API_TIMEOUT
 import logging
@@ -43,11 +40,7 @@ import logging
 from src.utils.validators import (
     _normalize,
     simple_cleaned_vessel_name,
-    text_cleaning,
-    only_letters_regex,
-    clean_letters_commas,
-    find_emails,
-    only_letters_digits_spaces)
+    only_letters_regex)
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -706,340 +699,49 @@ def clean_languages(languages_list: list[dict]) -> list[dict]:
 
 
 # ЧТЕНИЕ HTML ФАЙЛА
-def get_html_content(file_path):
-    """
-    возвращает объект bs4 для дальнейшего обращения разными парсерами
-    
-    """
-    with open(file_path, 'r', encoding='utf-8') as f:
-        html_content = f.read()
-    soup = BeautifulSoup(html_content, 'html.parser') 
-    return soup
-
+# def get_html_content(file_path):>>>> .\srs\parsers\html.py
 
 # ПАРСЕР ФОТО
-def get_photo_simple(soup):
-    """Парсит фото и проверят на наличие заглушки
+# def get_photo_simple(soup):>>>> .\srs\parsers\photo.py
 
-    Args:
-        soup (bs4.BeautifulSoup): html файл обработанный с помощью BeautifulSoup(html_content, 'html.parser')
-
-    Returns:
-        str: mime_type вид изображения (image/jpeg, image/png, ...)
-        base64: img_data битовая строка
-    """
-      
-    src = soup.find('td', class_ = 'cvAvatar').find('img').get('src')
-    header, data64 = src.split(',', 1)
-    mime_type = header.split(';')[0].split(':')[1]  # image/jpeg
-    ext = mime_type.split('/')[1]
-    
-    if not data64.startswith('iVBORw0KGgoAAAANSUhEUgAAARgAAAEZCAY'):
-        img_data = base64.b64decode(data64)
-        return mime_type, img_data
-    else:
-        return None   
-    
 # ПАРСЕР ФОТО    
-# def get_photo(soup):
-#     td = soup.find('td', class_='cvAvatar')
-#     if not td:
-#         return None
-
-#     img = td.find('img')
-#     if not img:
-#         return None
-
-#     src = img.get('src')
-#     if not src or ',' not in src:
-#         return None
-
-#     header, data64 = src.split(',', 1)
-
-#     if not header.startswith('data:'):
-#         return None
-
-#     mime_type = header.split(';', 1)[0].split(':', 1)[1]
-#     image_bytes = base64.b64decode(data64)
-
-#     if data64.startswith('iVBORw0KGgoAAAANSUhEUgAAARgAAAEZCAY'):
-#         return None
-
-#     return {
-#         "mime_type": mime_type,
-#         # "file_obj": image_bytes,
-#         "file_obj": io.BytesIO(image_bytes),
-#         "filename": "photo.jpg"
-#     }
+# def get_photo(soup, save_dir="out_manual", filename="photo.jpg"): >>>> .\srs\parsers\photo.py
     
-def get_photo(soup, save_dir="out_manual", filename="photo.jpg"):
-    td = soup.find('td', class_='cvAvatar')
-    if not td:
-        return None
-
-    img = td.find('img')
-    if not img:
-        return None
-
-    src = img.get('src')
-    if not src or ',' not in src:
-        return None
-
-    header, data64 = src.split(',', 1)
-    if not header.startswith('data:'):
-        return None
-
-    mime_type = header.split(';', 1)[0].split(':', 1)[1]
-    image_bytes = base64.b64decode(data64)
-
-    if data64.startswith('iVBORw0KGgoAAAANSUhEUgAAARgAAAEZCAY'):
-        return None
-
-    ext = {
-        "image/jpeg": ".jpg",
-        "image/png": ".png",
-        "image/gif": ".gif",
-        "image/webp": ".webp",
-    }.get(mime_type, ".bin")
-
-    save_path = Path(save_dir)
-    save_path.mkdir(parents=True, exist_ok=True)
-
-    full_path = save_path / Path(filename).with_suffix(ext)
-    with open(full_path, "wb") as f:
-        f.write(image_bytes)
-
-    return {
-        "mime_type": mime_type,
-        "file_obj": io.BytesIO(image_bytes),
-        "filename": full_path.name,
-        "saved_path": str(full_path),
-    }
-
-
 # ОЧИСТКА ТЕКСТА
-# def text_cleaning(raw_text): ------------------->>>> .\srs\utils\validators.py
+# def text_cleaning(raw_text): >>>> .\srs\utils\validators.py
 
 # ОСНОВНОЙ ПАРСЕР 
-def main_parser(soup):
-    """Парсит все таблицы (кроме Notes) и сохраняет данные в словарь 
-
-    Args:
-        soup (bs4.BeautifulSoup): html файл обработанный с помощью BeautifulSoup(html_content, 'html.parser')
-
-    Returns:
-        dict: Общий словарь по всем таблицам 
-    """
-    
-    all_sections = {}
-    
-    tables = soup.find_all('table')
-    
-    for table in tables:
-        title_row = table.find('tr', class_='cv-title')
-        if title_row:
-            
-            table_title = title_row.get_text(strip=True)
-            
-            # Если найдены таблицы 'Main info','Additional info':
-            if table_title in ['Main info','Additional info']:
-               
-                # находим все ключи
-                keys = [
-                        text_cleaning(td.get_text(strip=True))
-                        for td
-                        # таблицу  'Main info' находим по классу
-                        in table.find_all('td', class_='col-title')
-                        # in soup.find('table', class_='cv-body').find_all('td', class_='col-title')
-                        ]
-                # находим все значения
-                values = [
-                
-                        [text_cleaning(div.get_text(strip=True)) for div in td.find_all('div')]
-                        if td.find_all('div') else text_cleaning(td.get_text(strip=True))
-                    for td
-                    in table.find_all('td', class_='cv-content')
-                    # in soup.find('table', class_='cv-body').find_all('td', class_='cv-content')
-                    ]
-                # пакуем в словарь
-                section_data = dict(zip(keys,values))
-                
-                all_sections[table_title] = section_data
-                    
-            
-            # парсинг таблицы Biometrics
-            elif table_title == 'Biometrics':
-                section_data = {}
-                rows = table.find_all('tr')
-                for row in rows[1:]:
-                    cells = row.find_all('td')
-                    for cell in cells:
-                        text = cell.get_text(strip=True)
-                        if len(text.split(':'))>1:
-                            section_data[text.split(':')[0]] = text.split(':')[1]
-                        else:
-                            section_data[text.split(':')[0]] = None
-            
-                all_sections[table_title] = section_data
-            
-            # парсинг остальных таблиц ДОКУМЕНТЫ И СТАЖ
-            else:
-                rows = table.find_all('tr')
-                if len(rows) < 2:
-                    all_sections[table_title] = None
-                    continue
-            
-                # Заголовки ИЗ ПЕРВОЙ строки данных (rows[1])
-                headers = [th.get_text(strip=True) for th in rows[1].find_all(['td', 'th'])]
-                if not headers:
-                    all_sections[table_title] = None
-                    continue
-            
-                # Данные начиная со ВТОРОЙ строки данных (rows[2:])
-                section_data = []
-                for row in rows[2:]:
-                    cells = row.find_all(['td', 'th'])
-                    if len(cells) == len(headers):
-                        row_dict = dict(zip(headers, [text_cleaning(cell.get_text(strip=True)) for cell in cells]))
-                        section_data.append(row_dict)
-
-                all_sections[table_title] = section_data     
- 
-    return all_sections
-
-
+# def main_parser(soup):>>>> .\srs\parsers\html.py
 
 # ПАРСЕР ТЕКСТА ЗАМЕТОК
-def parse_notes(soup):
-    """Парсит значение в поле Notes
-
-    Args:
-        soup (bs4.BeautifulSoup): .html файл или его часть перобразованный в bs.4
-
-    Returns:
-        str: текст из поля Notes
-    """
-    tables = soup.find_all('table')
-    
-    for table in tables:
-        title_row = table.find('tr',class_ ='cv-title')
-        if title_row and title_row.get_text(strip=True) == 'Additional info':
-            
-            rows = table.find_all('tr')
-            
-            for row_idx, row in enumerate(rows):
-                if row.get('class') and 'cv-title' in row.get('class', []):
-                    if row.get_text(strip=True) =='Notes':
-                        if row_idx + 1 < len(rows):
-                            value_row = rows[row_idx + 1]
-                            return value_row.get_text(strip=True).replace('\n', ' ')
-                        else:
-                            return None
+# def parse_notes(soup):>>>> .\srs\parsers\html.py
 
 # =========================
 # 3 DATA HANDLING
 # =========================
 
 # вернуть только буквы
-# def only_letters_regex(text):------------------->>>> .\srs\utils\validators.py
+# def only_letters_regex(text):>>>> .\src\utils\validators.py
 
 
 # Разделить ФИО
-def get_names(names_string):
-    # предполагаем что первым идет имя
-    name = only_letters_regex(names_string.split(' ')[0])
-    name = name if name else 'Field is Empty / Поле не заполненно'
-    # все что в середине здесь
-    middle_name = only_letters_regex(names_string.split(' ',1)[1].rsplit(' ',1)[0] if len(names_string.split(' ')) > 2 else None)
-    # фамилия в конце
-    surname = only_letters_regex(names_string.split(' ')[-1]) 
-    surname = surname if surname else 'Field is Empty / Поле не заполненно'
-    return name, middle_name, surname 
-    
+# def get_names(names_string):>>>> .\src\extractors\names.py
 
 # Дата рождения и место рождения
-def get_birth_day_place(birth_day_place_string):
-    if len(birth_day_place_string.split(' ',1))==2:
-        day, place = birth_day_place_string.split(' ',1)
-    return day, place
+# def get_birth_day_place(birth_day_place_string):>>>> .\src\extractors\dates.py
 
 # очистка текста
-# def clean_letters_commas(text):------------------->>>> .\srs\utils\validators.py
+# def clean_letters_commas(text):>>>> .\srs\utils\validators.py
 
 # Главная функция: извлечь дату и вернуть ISO
-def extract_date_to_iso(text):     
-    """
-    Ищет дату в строке, конвертирует в ISO (YYYY-MM-DD), возвращает кортеж:
-    (iso_date или None, остальная_строка_без_даты)
-    """
-    if not text:                   # Проверяем на пустую строку
-        return None         # Возвращаем None 
-    
-    cleaned = text.strip()         # Удаляем пробелы по краям
-    
-    # Паттерн для дат: DD.MM.YYYY, DD/MM/YYYY, DD-MM-YYYY
-    date_pattern = r'\b(\d{1,2})[./-](\d{1,2})[./-](\d{4})\b'
-                                   # \b - граница слова
-                                   # (\d{1,2}) - день (группа 1)
-                                   # [./-] - разделитель
-                                   # (\d{1,2}) - месяц (группа 2)
-                                   # (\d{4}) - год (группа 3)
-    
-    match = re.search(date_pattern, cleaned)  
-                                   # Ищем первую дату в строке
-    
-    if not match:                  # Если дата не найдена
-        return None, clean_letters_commas(cleaned)       # Возвращаем None и всю строку
-    
-    day, month, year = match.groups()  
-                                   # Извлекаем день, месяц, год из групп
-    
-    try:                           # Пробуем создать дату
-        # Парсим дату в формате DD.MM.YYYY
-        date_obj = datetime(int(year), int(month), int(day))
-                                   # int() преобразует строки в числа
-                                   # datetime проверяет корректность (29.02 в невисокосный)
-        
-        iso_date = date_obj.strftime('%Y-%m-%d')  
-                                   # Конвертируем в ISO: YYYY-MM-DD
-        
-        # Удаляем найденную дату из строки
-        start, end = match.span()  # Получаем позиции даты в строке
-        remaining_text = cleaned[:start].strip() + ' ' + cleaned[end:].strip()
-                                   # Обрезаем дату, склеиваем остаток
-        remaining_text = ' '.join(remaining_text.split())  
-                                   # Нормализуем множественные пробелы
-        
-        return iso_date, remaining_text
-
-
-
-                                   # Возвращаем ISO дату и остаток текста
-    
-    except ValueError:             # Если дата невалидна (32.13.2025)
-        return None      # Возвращаем None и исходную строку
+# def extract_date_to_iso(text):>>>> .\src\extractors\dates.py
 
 # ****************************************
 # поиск всех емейлов
-# def find_emails(text):------------------->>>> .\srs\utils\validators.py
+# def find_emails(text):>>>> .\srs\utils\validators.py
 
-def get_emails_list(email_string):
-    """Из строки с емейлами делает словарь по форме 
-    {"email":"email", "comment":"comment", "uuid":"uuid"}
 
-    Args:
-        email_string (str): строка в которую должен входить email
-
-    Returns:
-        _type_: _description_
-    """
-    emails_list = []
-    if find_emails(email_string):
-        for email in find_emails(email_string):
-            emails_list.append({"email":email, "comment":"comment", "uuid":None})
-    else:
-        return None
-    return emails_list
+# def get_emails_list(email_string):>>>> .\src\extractors\emails.py
 # ****************************************
 
 # ПОЛУЧЕНИЕ СТРАНЫ ПРОЖИВАНИЯ
@@ -1075,13 +777,7 @@ def get_resident_country(search_term: str, citizenship: str):
     
 # ****************************************
 # ПОЛУЧЕНИЕ СЛОВАРЕЙ ТЕЛЕФОНОВ
-def normalize_phone(raw: str) -> str:
-    raw = (raw or "").strip()
-    if raw.startswith("00"):
-        raw = "+" + raw[2:]
-    elif raw[:1].isdigit():
-        raw = "+" + raw
-    return re.sub(r"[^\d+]", "", raw)
+# def normalize_phone(raw: str) -> str:>>>> .\src\extractors\phones.py
 
 def resolve_country_by_code(country_code: str, resident_country_id, nationality_country_id, search_geo_func):
     results = search_geo_func(country_code, "countries") or []
@@ -1118,72 +814,20 @@ def resolve_country_by_code(country_code: str, resident_country_id, nationality_
         "matches": results,
     }
 
-def parse_phone(raw_phone: str, resident_country_id, nationality_country_id, search_geo_func):
-    phone = normalize_phone(raw_phone)
-    if not phone:
-        return None
 
-    try:
-        num = phonenumbers.parse(phone, None)
-    except phonenumbers.NumberParseException:
-        return None
+# def parse_phone(raw_phone: str, resident_country_id, nationality_country_id, search_geo_func):>>>> .\src\extractors\phones.py
 
-    country_code = str(num.country_code)
-    national_number = str(num.national_number)
-
-    country = resolve_country_by_code(
-        country_code,
-        resident_country_id,
-        nationality_country_id,
-        search_geo_func
-    )
-
-    return {
-        "raw_phone": raw_phone,
-        "country_code": country_code,
-        "dial_code": f"+{country_code}",
-        "national_number": national_number,
-        **country,
-    }
-    
-def get_phones(phones: str, resident_country_id, nationality_country_id, search_geo_func) -> list[dict]:
-    items = []
-    for raw_phone in phones.split():
-        row = parse_phone(raw_phone, resident_country_id, nationality_country_id, search_geo_func)
-        if not row or row["country_id"] is None:
-            continue
-
-        items.append({
-            "uuid": None,
-            "country_id": row["country_id"],
-            "number": row["national_number"],
-            "type_id": 1,
-            "comment": "comment",
-        })
-    return items
+# def get_phones(phones: str, resident_country_id, nationality_country_id, search_geo_func) -> list[dict]:>>>> .\src\extractors\phones.py
 
 # ****************************************
-# def only_letters_digits_spaces(text:str) -> bool:------------------->>>> .\srs\utils\validators.py
+# def only_letters_digits_spaces(text:str) -> bool:>>>> .\srs\utils\validators.py
 
-# def only_digits_spaces_plus_minus(text):------------------->>>> .\srs\utils\validators.py
+# def only_digits_spaces_plus_minus(text):>>>> .\srs\utils\validators.py
 
+# def get_personal_id_by_passport(pasports_list_of_dicts):>>>> .\src\extractors\documents.py
+
+# def get_ranks(ranks):>>>> .\src\extractors\documents.py
                               
-def get_personal_id_by_passport(pasports_list_of_dicts):
-    priority_docs = ['International passport', 'National passport', "Seaman's book"]
-    
-    for doc_type in priority_docs:
-        for doc in (pasports_list_of_dicts or []):
-            if doc.get('Title of document') == doc_type:
-                return doc['No.'] if only_letters_digits_spaces(doc['No.']) else None, doc_type
-    
-    return None, 'No documents'
-   
-def get_ranks(ranks):
-    """Разбивает все ранги по '/' в плоский список"""
-    all_ranks = [part.strip() for rank in ranks for part in rank.split('/')]
-    return all_ranks
-
-
 def get_languages(languages):
     lang_list = re.split(r', |/', languages)
     return [part.split(' ',1)[0] if ' ' in part else part for part in lang_list]
