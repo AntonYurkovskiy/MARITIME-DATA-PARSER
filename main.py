@@ -4,6 +4,8 @@ from pathlib import Path
 
 import functions
 from src.config import INPUT_DIR
+from src.domain.builder import build_seafarer_dict
+from src.domain.languages import country_to_language
 from src.extractors.dates import extract_date_to_iso
 from src.extractors.documents import get_personal_id_by_passport, get_ranks
 from src.extractors.emails import get_emails_list
@@ -16,8 +18,6 @@ importlib.reload(functions)
 from functions import (
     add_historical_contract,
     add_seafarer,
-    build_seafarer_dict,
-    country_to_language,
     get_dict,
     get_id,
     get_languages,

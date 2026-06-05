@@ -31,8 +31,8 @@ import difflib
 
 import rapidfuzz
 from rapidfuzz import fuzz, process, utils
+from src.domain.builder import stringify_id_fields
 from src.extractors.dates import extract_date_to_iso
-from src.parsers.photo import get_photo
 from src.utils.mapping import get_value, load_mapping, set_value, update_mapping
 from src.config import API_BASE_URL, API_TIMEOUT
 import logging
@@ -122,21 +122,7 @@ def _add_value_in_dict(value: str, dict_name: str) -> dict:
     return response.json()
 
 # явное приведение к строковым данным всех id
-def stringify_id_fields(data: dict) -> dict:
-    result = {}
-    for key, value in data.items():
-        if isinstance(value, dict):
-            result[key] = stringify_id_fields(value)
-        elif isinstance(value, list):
-            result[key] = [
-                stringify_id_fields(x) if isinstance(x, dict) else x
-                for x in value
-            ]
-        elif key.endswith("_id") and value is not None:
-            result[key] = str(value)
-        else:
-            result[key] = value
-    return result
+# def stringify_id_fields(data: dict) -> dict:>>>> .\src\domain\builder.py
 
 def add_seafarer(main:dict[str, any])-> dict[str, any]:
     """Добавляет данные о моряке на 360Crew API"""
@@ -832,64 +818,7 @@ def get_languages(languages):
     lang_list = re.split(r', |/', languages)
     return [part.split(' ',1)[0] if ' ' in part else part for part in lang_list]
 
+# def country_to_language(country: str) -> Optional[str]:>>>> .\src\domain\languages.py
 
-def country_to_language(country: str) -> Optional[str]:
-    """Страна → язык (case-insensitive)"""
-    if not country:
-        return None
-    
-    normalized = country.strip()
-    
-    # Точное совпадение
-    if normalized in COUNTRY_TO_LANGUAGE:
-        return COUNTRY_TO_LANGUAGE[normalized]
-    
-    # Без регистра
-    normalized_lower = normalized.lower()
-    for country_name, lang in COUNTRY_TO_LANGUAGE.items():
-        if country_name.lower() == normalized_lower:
-            return lang
-    
-    return None
+# def build_seafarer_dict(..>>>> .\src\domain\builder.py
 
-
-def build_seafarer_dict(
-    soup,
-    name,
-    middle_name,
-    surname,
-    rank_id,
-    additional_ranks,
-    date_of_birth,
-    place_of_birth,
-    gender_id,
-    marital_status_id,
-    nationality_country_id,
-    emails,
-    resident_country_id,
-    notes,
-    phones_list_of_dicts,
-    personal_id,
-    language_id_by_citizenship
-):
-    photo = get_photo(soup)
-
-    return {
-        "photo": photo,
-        "name": name,
-        "middle_name": middle_name,
-        "surname": surname,
-        "rank_id": rank_id,
-        "additional_ranks_id": additional_ranks,
-        "date_of_birth": date_of_birth,
-        "place_of_birth": place_of_birth,
-        "gender_id": gender_id,
-        "marital_status_id": marital_status_id,
-        "nationality_country_id": nationality_country_id,
-        "emails": emails,
-        # "resident_status_id": resident_country_id,
-        "fast_note": notes,
-        "phone_numbers": phones_list_of_dicts,
-        "personal_id": personal_id,
-        "language_id": language_id_by_citizenship
-    }
