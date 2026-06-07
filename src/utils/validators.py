@@ -1,5 +1,4 @@
 import re
-from typing import Any
 from typing import Optional
 
 def _normalize(text: str) -> str:
@@ -63,11 +62,7 @@ def clean_letters_commas(text) -> Optional[str]:
 
     return result if result else None
 
-
-def find_emails(text) -> list[Any]:
-    pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-    return re.findall(pattern, text)
-
+# def find_emails(text) -> list[Any]:>>> .\src\extractors\emails.py
 
 def only_letters_digits_spaces(text:str) -> bool:
     """Проверяет: только буквы, цифры, пробелы"""

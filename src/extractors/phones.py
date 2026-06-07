@@ -3,7 +3,7 @@ import re
 # функция получения названия страны по коду телефона,
 # с учетом резидентства и гражданства - провеирить ее на циклические импорт 
 # и при необходимости вынести в utils или создать отдельный файл для работы с гео данными
-from functions import resolve_country_by_code
+from src.api.geo import resolve_country_by_code
 
 import phonenumbers
 

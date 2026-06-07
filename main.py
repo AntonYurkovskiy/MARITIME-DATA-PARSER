@@ -2,7 +2,11 @@ import importlib
 import logging
 from pathlib import Path
 
-import functions
+# import functions
+from src.api.dicts import get_dict
+from src.api.geo import get_resident_country, search_geo
+from src.api.seafarers import add_seafarer, get_id, upload_seafarer_photo
+from src.api.vessels import add_historical_contract
 from src.config import INPUT_DIR
 from src.domain.builder import build_seafarer_dict
 from src.domain.languages import country_to_language
@@ -12,19 +16,13 @@ from src.extractors.emails import get_emails_list
 from src.extractors.names import get_names
 from src.extractors.phones import get_phones
 from src.parsers.html import get_html_content, main_parser, parse_notes
+# from src.domain.languages import (
+#     get_languages,
+# )
 
-importlib.reload(functions)
+# importlib.reload(functions)
 
-from functions import (
-    add_historical_contract,
-    add_seafarer,
-    get_dict,
-    get_id,
-    get_languages,
-    get_resident_country,
-    search_geo,
-    upload_seafarer_photo,
-)
+
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -69,8 +67,8 @@ def process_all_files(html_files, ranks, gender, marital_statuses, resident_stat
             nationality_country = search_geo(main_info["Main info"]["Citizenship:"], "countries")
             nationality_country_id = nationality_country[0]["id"] if nationality_country else ""
 
-            languages_list = get_languages(main_info["Additional info"]["Knowledge of other languages:"])
-            language_id = ([get_id(languages, language, "languages") for language in languages_list] if languages_list else [])[0]
+            # languages_list = get_languages(main_info["Additional info"]["Knowledge of other languages:"])
+            # language_id = ([get_id(languages, language, "languages") for language in languages_list] if languages_list else [])[0]
             language_id_by_citizenship = get_id(languages, country_to_language(main_info["Main info"]["Citizenship:"]), "languages")
 
             resident_country = get_resident_country(

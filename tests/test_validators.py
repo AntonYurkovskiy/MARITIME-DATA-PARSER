@@ -1,13 +1,13 @@
 import pytest
 from typing import Any, Optional
 
+from src.extractors.emails import find_emails
 from src.utils.validators import (
     _normalize,
     simple_cleaned_vessel_name,
     text_cleaning,
     only_letters_regex,
     clean_letters_commas,
-    find_emails,
     only_letters_digits_spaces,
     only_digits_spaces_plus_minus,
 )

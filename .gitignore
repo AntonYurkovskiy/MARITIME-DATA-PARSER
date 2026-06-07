@@ -5,6 +5,8 @@
 /out/
 /out_manual/
 /extracted_images/
+/out_of_rep/
+/baks/
 
 __pycache__
 tz.md
