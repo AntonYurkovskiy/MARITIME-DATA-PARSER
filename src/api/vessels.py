@@ -120,70 +120,244 @@ def _best_fuzzy_item(query: str, items: list):
     return best_item, best_score
 
 
-def get_vessel_uuid(vessel_name: str):
-    sources = [
-        ("historical", "/historical/search"),
-        ("main", "/search"),
-        ("external", "/search"),
-    ]
-
+def find_exact_vessel_uuid(vessel_name: str, sources: list):
+    """Поиск судна по точному совпадению полного имени.
+    
+    Args:
+        vessel_name: Полное имя для поиска
+        sources: Список кортежей (source, route)
+    
+    Returns:
+        tuple: (best_item, best_source, best_score)
+    """
     best_item = None
     best_source = None
     best_score = -1
-
-    # 1) Сначала пробуем полный запрос через contains
+    
     for source, route in sources:
         result = search_vessel(vessel_name, source, route)
         items = _extract_items(result)
-
+        
         if items:
+            # Ищем точное совпадение
             for item in items:
                 candidate = _get_vessel_name(item)
                 if not candidate:
                     continue
-
+                
                 if _normalize(candidate) == _normalize(vessel_name):
-                    return item.get("uuid"), source, item
-
+                    return item, source, 100  # Точное совпадение - макс балл
+            
+            # Если точного нет, ищем лучший fuzzy match в результатах
             item, score = _best_fuzzy_item(vessel_name, items)
             if item and score > best_score:
                 best_item = item
                 best_source = source
                 best_score = score
+    
+    return best_item, best_source, best_score
 
-    # 2) Если ничего не нашлось, пробуем части имени
+
+def search_by_name_variants(vessel_name: str, sources: list, best_item, best_source, best_score):
+    """Поиск судна по вариантам имени (первое слово, последнее, пары слов).
+    
+    Args:
+        vessel_name: Полное имя для поиска вариантов
+        sources: Список кортежей (source, route)
+        best_item, best_source, best_score: Лучший результат из предыдущего поиска
+    
+    Returns:
+        tuple: (best_item, best_source, best_score)
+    """
     for query in _name_variants(vessel_name):
         if _normalize(query) == _normalize(vessel_name):
             continue
-
+        
         for source, route in sources:
             result = search_vessel(query, source, route)
             items = _extract_items(result)
-
+            
             if not items:
                 continue
-
+            
             for item in items:
                 candidate = _get_vessel_name(item)
                 if not candidate:
                     continue
-
+                
                 score = fuzz.WRatio(
                     vessel_name,
                     candidate,
                     processor=utils.default_process,
                     score_cutoff=0,
                 )
-
+                
                 if score > best_score:
                     best_item = item
                     best_source = source
                     best_score = score
+    
+    return best_item, best_source, best_score
 
+
+def get_vessel_uuid(vessel_name: str):
+    """Ищет UUID судна: сначала exact match, затем fuzzy search по вариантам имени.
+    
+    Args:
+        vessel_name: Название судна для поиска
+    
+    Returns:
+        tuple: (uuid, source, item) или (None, None, None)
+    """
+    sources = [
+        ("historical", "/historical/search"),
+        ("main", "/search"),
+        ("external", "/search"),
+    ]
+    
+    # Phase 1: поиск по полному имени (exact + fuzzy)
+    best_item, best_source, best_score = find_exact_vessel_uuid(vessel_name, sources)
+    
+    # Если найдено точное совпадение, возвращаем сразу
+    if best_item and best_score >= 100:
+        return best_item.get("uuid"), best_source, best_item
+    
+    # Phase 2: поиск по вариантам имени
+    best_item, best_source, best_score = search_by_name_variants(
+        vessel_name, sources, best_item, best_source, best_score
+    )
+    
+    # Принимаем результат если score >= 80
     if best_item and best_score >= 80:
         return best_item.get("uuid"), best_source, best_item
-
+    
     return None, None, None
+
+
+def resolve_historical_vessel(cleaned_vessel_name: str, raw_vessel_name: str, local_vessel_types: dict):
+    """Разрешает UUID исторического судна: поиск или создание.
+    
+    Returns:
+        tuple: (vessel_uuid, source)
+    """
+    vessel_uuid = None
+    source = 'historical'
+    
+    if cleaned_vessel_name:
+        vessel_uuid, search_source, _ = get_vessel_uuid(cleaned_vessel_name)
+        # Если найдено не-историческое судно, создаём историческое
+        if search_source != 'historical':
+            logger.debug(
+                "Historical contract vessel lookup returned non-historical source=%s; creating historical vessel",
+                search_source,
+            )
+            vessel_uuid = None
+    
+    if not vessel_uuid:
+        # Создаём новое историческое судно
+        created_vessel = _add_new_vessel(
+            {'Vessel Name / Flag': raw_vessel_name, 'Vessel type / DWT': raw_vessel_name},
+            local_vessel_types
+        )
+        vessel_uuid = (
+            created_vessel.get('inserted', {}).get('uuid') 
+            or created_vessel.get('uuid') 
+            or created_vessel.get('id')
+        )
+    
+    if not vessel_uuid:
+        raise ValueError("Unable to resolve or create vessel UUID for historical contract")
+    
+    return vessel_uuid, source
+
+
+def parse_contract_period(contract_period: str):
+    """Парсит период контракта (From - Till) в две ISO даты.
+    
+    Returns:
+        tuple: (sign_on_date, sign_off_date)
+    """
+    if not contract_period or not isinstance(contract_period, str):
+        raise ValueError("Missing or invalid From - Till value: %r" % contract_period)
+
+    period_parts = [
+        part.strip() 
+        for part in re.split(r'\s*[-–—]\s*', contract_period, maxsplit=1) 
+        if part.strip()
+    ]
+    if len(period_parts) < 2:
+        raise ValueError("Unable to split From - Till into two dates: %r" % contract_period)
+
+    sign_on_date_raw = extract_date_to_iso(period_parts[0])
+    sign_off_date_raw = extract_date_to_iso(period_parts[1])
+    sign_on_date = sign_on_date_raw[0] if sign_on_date_raw else None
+    sign_off_date = sign_off_date_raw[0] if sign_off_date_raw else None
+
+    if not sign_on_date or not sign_off_date:
+        raise ValueError(
+            "Unable to parse contract dates from From - Till: %r (on=%r off=%r)"
+            % (contract_period, sign_on_date, sign_off_date)
+        )
+    
+    return sign_on_date, sign_off_date
+
+
+def build_historical_contract_payload(
+    seafarer_uuid: str, 
+    rank_id: str, 
+    vessel_uuid: str, 
+    source: str, 
+    sign_on_date: str, 
+    sign_off_date: str,
+    raw_vessel_name: str
+):
+    """Формирует payload для контракта.
+    
+    Returns:
+        dict: готовый payload для API
+    """
+    if not raw_vessel_name:
+        raise ValueError("Missing Vessel Name / Flag for historical contract entry")
+
+    payload = {
+        "is_historical": True,
+        "seafarer_uuid": seafarer_uuid,
+        "rank_id": rank_id,
+        "vessel": {
+            "uuid": vessel_uuid,
+            "source": source
+        },
+        "is_automatic": True,
+        "sign_on_date": sign_on_date,
+        "sign_off_date": sign_off_date,
+        "off_reason_id": 0,
+        "is_historical": 1,
+        "details": "Imported from CV"
+    }
+    
+    return payload
+
+
+def post_historical_contract(url: str, payload: dict):
+    """Отправляет контракт на API и возвращает ответ.
+    
+    Returns:
+        dict: ответ сервера
+    """
+    session = _get_session()
+    logger.debug("Posting historical contract: %s", payload)
+
+    response = session.post(url, json=payload)
+    if response.status_code >= 400:
+        logger.error(
+            "Historical contract failed (%s): status=%s text=%s payload=%s",
+            url,
+            response.status_code,
+            response.text,
+            payload,
+        )
+    response.raise_for_status()
+    return response.json()
 
 
 def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
@@ -236,7 +410,7 @@ def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
 
 
 # для одного запроса работает
-def add_historical_contract(sea_service:dict, seafarer_uuid:str, ranks, local_vessel_types):
+def add_historical_contract(sea_service: dict, seafarer_uuid: str, ranks, local_vessel_types):
     """Добавляет данные о контракте на 360Crew API"""
     rank_id = get_id(ranks, sea_service.get('Position'), 'ranks')
     if not rank_id:
@@ -245,81 +419,22 @@ def add_historical_contract(sea_service:dict, seafarer_uuid:str, ranks, local_ve
     raw_vessel_name = sea_service.get('Vessel Name / Flag')
     cleaned_vessel_name = simple_cleaned_vessel_name(raw_vessel_name) if raw_vessel_name else None
 
-    if cleaned_vessel_name:
-        vessel_uuid, source, _ = get_vessel_uuid(cleaned_vessel_name)
-    else:
-        vessel_uuid, source = None, 'historical'
+    # 1. Разрешить UUID судна
+    vessel_uuid, source = resolve_historical_vessel(cleaned_vessel_name, raw_vessel_name, local_vessel_types)
 
-    if source != 'historical':
-        logger.debug(
-            "Historical contract vessel lookup returned non-historical source=%s; creating historical vessel",
-            source,
-        )
-        vessel_uuid = None
-        source = 'historical'
-
-    if not vessel_uuid:
-        created_vessel = _add_new_vessel(sea_service, local_vessel_types)
-        vessel_uuid = created_vessel.get('inserted', {}).get('uuid') or created_vessel.get('uuid') or created_vessel.get('id')
-        source = source or 'historical'
-
-    if not vessel_uuid:
-        raise ValueError("Unable to resolve or create vessel UUID for historical contract")
-
+    # 2. Парсить период контракта
     contract_period = sea_service.get('From - Till')
-    if not contract_period or not isinstance(contract_period, str):
-        raise ValueError("Missing or invalid From - Till value: %r" % contract_period)
+    sign_on_date, sign_off_date = parse_contract_period(contract_period)
 
-    period_parts = [part.strip() for part in re.split(r'\s*[-–—]\s*', contract_period, maxsplit=1) if part.strip()]
-    if len(period_parts) < 2:
-        raise ValueError("Unable to split From - Till into two dates: %r" % contract_period)
-
-    sign_on_date_raw = extract_date_to_iso(period_parts[0])
-    sign_off_date_raw = extract_date_to_iso(period_parts[1])
-    sign_on_date = sign_on_date_raw[0] if sign_on_date_raw else None
-    sign_off_date = sign_off_date_raw[0] if sign_off_date_raw else None
-
-    if not sign_on_date or not sign_off_date:
-        raise ValueError(
-            "Unable to parse contract dates from From - Till: %r (on=%r off=%r)"
-            % (contract_period, sign_on_date, sign_off_date)
-        )
-
-    if not raw_vessel_name:
-        raise ValueError("Missing Vessel Name / Flag for historical contract entry")
-
-    session = _get_session()
+    # 3. Построить payload
     url = f'{API_BASE_URL}/contracts/historical'
+    payload = build_historical_contract_payload(
+        seafarer_uuid, rank_id, vessel_uuid, source, 
+        sign_on_date, sign_off_date, raw_vessel_name
+    )
 
-    payload = {
-        "is_historical": True,
-        "seafarer_uuid": seafarer_uuid,
-        "rank_id": rank_id,
-        "vessel": {
-            "uuid": vessel_uuid,
-            "source": source
-        },
-        "is_automatic": True,
-        "sign_on_date": sign_on_date,
-        "sign_off_date": sign_off_date,
-        "off_reason_id": 0,
-        "is_historical": 1,
-        "details": "Imported from CV"
-    }
-
-    logger.debug("Posting historical contract: %s", payload)
-
-    response = session.post(url, json=payload)
-    if response.status_code >= 400:
-        logger.error(
-            "Historical contract failed (%s): status=%s text=%s payload=%s",
-            url,
-            response.status_code,
-            response.text,
-            payload,
-        )
-    response.raise_for_status()
-    return response.json()
+    # 4. Отправить контракт
+    return post_historical_contract(url, payload)
 
 
 def search_external_vessel(name_or_imo: str) -> list[dict[str, Any]]:
