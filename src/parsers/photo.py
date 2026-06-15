@@ -1,9 +1,66 @@
 import base64
 import io
 from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
+
+# **** START REFACTORING ****
+# **** BEFORE ****
+
+# def get_photo(soup, save_dir="out_manual", filename="photo.jpg"):
+#     td = soup.find('td', class_='cvAvatar')
+#     if not td:
+#         return None
+
+#     img = td.find('img')
+#     if not img:
+#         return None
+
+#     src = img.get('src')
+#     if not src or ',' not in src:
+#         return None
+
+#     header, data64 = src.split(',', 1)
+#     if not header.startswith('data:'):
+#         return None
+
+#     mime_type = header.split(';', 1)[0].split(':', 1)[1]
+#     image_bytes = base64.b64decode(data64)
+
+#     if data64.startswith('iVBORw0KGgoAAAANSUhEUgAAARgAAAEZCAY'):
+#         return None
+
+#     ext = {
+#         "image/jpeg": ".jpg",
+#         "image/png": ".png",
+#         "image/gif": ".gif",
+#         "image/webp": ".webp",
+#     }.get(mime_type, ".bin")
 
 
-def get_photo(soup, save_dir="out_manual", filename="photo.jpg"):
+#     # ********************************************
+#     # сделать версию без сохранения на диск,
+#     # а просто возвращать байты и mime_type
+#     # для дальнейшей обработки
+#     save_path = Path(save_dir)
+#     save_path.mkdir(parents=True, exist_ok=True)
+
+#     full_path = save_path / Path(filename).with_suffix(ext)
+#     with open(full_path, "wb") as f:
+#         f.write(image_bytes)
+#     # ********************************************
+    
+    
+#     return {
+#         "mime_type": mime_type,
+#         "file_obj": io.BytesIO(image_bytes),
+#         "filename": full_path.name,
+#         "saved_path": str(full_path), # удалить из версии без сохранения
+#     }
+
+
+# **** AFTER ****
+def _extract_base64_image(soup) -> Optional[Tuple[bytes, str]]:
+    """Находит base64‑картинку в soup, возвращает (image_bytes, mime_type) или None."""
     td = soup.find('td', class_='cvAvatar')
     if not td:
         return None
@@ -21,12 +78,18 @@ def get_photo(soup, save_dir="out_manual", filename="photo.jpg"):
         return None
 
     mime_type = header.split(';', 1)[0].split(':', 1)[1]
-    image_bytes = base64.b64decode(data64)
 
+    # игнорируем дефолтный плейсхолдер-аватар
     if data64.startswith('iVBORw0KGgoAAAANSUhEUgAAARgAAAEZCAY'):
         return None
 
-    ext = {
+    image_bytes = base64.b64decode(data64)
+    return image_bytes, mime_type
+
+
+def _guess_extension(mime_type: str) -> str:
+    """Определяет расширение файла по mime_type."""
+    return {
         "image/jpeg": ".jpg",
         "image/png": ".png",
         "image/gif": ".gif",
@@ -34,45 +97,67 @@ def get_photo(soup, save_dir="out_manual", filename="photo.jpg"):
     }.get(mime_type, ".bin")
 
 
-    # ********************************************
-    # сделать версию без сохранения на диск,
-    # а просто возвращать байты и mime_type
-    # для дальнейшей обработки
+def _save_image_to_disk(image_bytes: bytes, mime_type: str, save_dir: str, filename: str) -> Path:
+    """Сохраняет байты изображения на диск и возвращает полный путь к файлу."""
+    ext = _guess_extension(mime_type)
     save_path = Path(save_dir)
     save_path.mkdir(parents=True, exist_ok=True)
-
     full_path = save_path / Path(filename).with_suffix(ext)
+
     with open(full_path, "wb") as f:
         f.write(image_bytes)
-    # ********************************************
-    
-    
-    return {
+
+    return full_path
+
+
+def _build_photo_object(image_bytes: bytes, mime_type: str, filename: str, saved_path: Optional[Path] = None) -> Dict[str, Any]:
+    """Готовит объект для загрузки (file_obj + метаданные)."""
+    result: Dict[str, Any] = {
         "mime_type": mime_type,
         "file_obj": io.BytesIO(image_bytes),
-        "filename": full_path.name,
-        "saved_path": str(full_path), # удалить из версии без сохранения
+        "filename": filename,
     }
+    if saved_path is not None:
+        result["saved_path"] = str(saved_path)
+    return result
 
 
-# def get_photo_simple(soup):
-#     """Парсит фото и проверят на наличие заглушки
+def get_photo(soup, save_dir: str = "out_manual", filename: str = "photo.jpg") -> Optional[Dict[str, Any]]:
+    """
+    Разбор base64-изображения + определение типа + сохранение файла на диск
+    + подготовка объекта для загрузки.
+    """
+    extracted = _extract_base64_image(soup)
+    if not extracted:
+        return None
 
-#     Args:
-#         soup (bs4.BeautifulSoup): html файл обработанный с помощью BeautifulSoup(html_content, 'html.parser')
+    image_bytes, mime_type = extracted
 
-#     Returns:
-#         str: mime_type вид изображения (image/jpeg, image/png, ...)
-#         base64: img_data битовая строка
-#     """
+    full_path = _save_image_to_disk(image_bytes, mime_type, save_dir, filename)
 
-#     src = soup.find('td', class_ = 'cvAvatar').find('img').get('src')
-#     header, data64 = src.split(',', 1)
-#     mime_type = header.split(';')[0].split(':')[1]  # image/jpeg
-#     ext = mime_type.split('/')[1]
+    return _build_photo_object(
+        image_bytes=image_bytes,
+        mime_type=mime_type,
+        filename=full_path.name,
+        saved_path=full_path,
+    )
 
-#     if not data64.startswith('iVBORw0KGgoAAAANSUhEUgAAARgAAAEZCAY'):
-#         img_data = base64.b64decode(data64)
-#         return mime_type, img_data
-#     else:
+# TODO:[refactor]:сделать версию без сохранения на диск,
+# но надо править тесты, прототип ниже
+
+# def get_photo_in_memory(soup) -> Optional[Dict[str, Any]]:
+#     extracted = _extract_base64_image(soup)
+#     if not extracted:
 #         return None
+
+#     image_bytes, mime_type = extracted
+#     ext = _guess_extension(mime_type)
+#     filename = f"photo{ext}"
+
+#     return _build_photo_object(
+#         image_bytes=image_bytes,
+#         mime_type=mime_type,
+#         filename=filename,
+#         saved_path=None,
+#     )
+# **** END REFACTORING ****
