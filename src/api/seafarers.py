@@ -1,5 +1,5 @@
 import json
-
+from typing import Any, Dict, Tuple, Optional
 import requests
 
 import logging
@@ -27,29 +27,47 @@ def add_seafarer(main:dict[str, any])-> dict[str, any]:
     return response.json()
 
 
-def upload_seafarer_photo(seafarer_uuid: str, photo: dict[str, any]) -> dict[str, any]:
-    """Загружает фото моряка отдельным запросом"""
-    if not photo or not photo.get("file_obj"):
-        return {"status": "no photo"}
+def validate_photo_payload(photo: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Проверяет, есть ли что грузить, и приводит photo к ожидаемому виду.
 
-    session = _get_session()  
-    url = f'{API_BASE_URL}/seafarers/{seafarer_uuid}/main'
+    Возвращает нормализованный dict или None, если фото нет.
+    """
+    if not photo or not photo.get("file_obj"):
+        return None
+
+    # Можно добавить простую нормализацию дефолтов
+    if "filename" not in photo:
+        photo["filename"] = "photo.jpg"
+    if "mime_type" not in photo:
+        photo["mime_type"] = "image/jpeg"
+
+    return photo
+
+
+def prepare_photo_upload_request(
+    seafarer_uuid: str,
+    photo: Dict[str, Any],
+) -> Tuple[requests.PreparedRequest, requests.Session]:
+    """Готовит multipart‑запрос для загрузки фото."""
+
+    session = _get_session()
+    url = f"{API_BASE_URL}/seafarers/{seafarer_uuid}/main"
 
     photo["file_obj"].seek(0)
     payload = {"data": json.dumps({"photo": {"fileRef": "A"}})}
     files = [
         (
-            'A',
+            "A",
             (
                 photo.get("filename", "photo.jpg"),
                 photo["file_obj"],
-                photo.get("mime_type", "image/jpeg")
-            )
+                photo.get("mime_type", "image/jpeg"),
+            ),
         )
     ]
 
     request_headers = {
-        "Accept": "application/json"
+        "Accept": "application/json",
     }
 
     logger.debug(
@@ -68,17 +86,44 @@ def upload_seafarer_photo(seafarer_uuid: str, photo: dict[str, any]) -> dict[str
         headers=request_headers,
     )
     prepared = session.prepare_request(request)
-    logger.debug("upload_seafarer_photo prepared headers: %s", dict(prepared.headers))
+    logger.debug(
+        "upload_seafarer_photo prepared headers: %s", dict(prepared.headers)
+    )
+
+    return prepared, session
+
+
+def send_photo_upload(
+    prepared: requests.PreparedRequest,
+    session: requests.Session,
+) -> Dict[str, Any]:
+    """Отправляет запрос с фото и обрабатывает ответ."""
 
     response = session.send(prepared, timeout=API_TIMEOUT)
     logger.debug("Response status: %s", response.status_code)
     logger.debug("Response text: %s", response.text)
+
     try:
         response.raise_for_status()
     except requests.exceptions.HTTPError:
-        logger.error("upload_seafarer_photo failed: %s %s", response.status_code, response.text)
+        logger.error(
+            "upload_seafarer_photo failed: %s %s",
+            response.status_code,
+            response.text,
+        )
         raise
+
     return response.json()
+
+
+def upload_seafarer_photo(seafarer_uuid: str, photo: Dict[str, Any]) -> Dict[str, Any]:
+    """Загружает фото моряка отдельным запросом (фасад)."""
+    normalized_photo = validate_photo_payload(photo)
+    if normalized_photo is None:
+        return {"status": "no photo"}
+
+    prepared, session = prepare_photo_upload_request(seafarer_uuid, normalized_photo)
+    return send_photo_upload(prepared, session)
 
 
 def get_id(dictionary, value, dict_name: str):
