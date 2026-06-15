@@ -375,59 +375,6 @@ def post_historical_contract(url: str, payload: dict):
     response.raise_for_status()
     return response.json()
 
-# ******* refactor start
-
-# for refactor
-
-# def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
-#     name_and_flag = contract_details.get('Vessel Name / Flag')
-#     if not name_and_flag:
-#         raise ValueError("Missing Vessel Name / Flag in historical contract entry")
-
-#     if ' / ' not in name_and_flag:
-#         raise ValueError("Unsupported Vessel Name / Flag format: %r" % name_and_flag)
-
-#     name = simple_cleaned_vessel_name(name_and_flag.rsplit(' / ',1)[0].strip()).upper()
-#     flag_country = name_and_flag.rsplit(' / ',1)[1].strip()
-
-#     flag_search = search_geo(flag_country)
-#     if flag_search:
-#         flag_country_id = flag_search[0]['id']
-#     else:
-#         mapped_flag = get_value(flag_country)
-#         if not mapped_flag:
-#             raise ValueError("Unable to resolve vessel flag country: %r" % flag_country)
-#         flag_search = search_geo(mapped_flag)
-#         flag_country_id = flag_search[0]['id'] if flag_search else None
-
-#     if flag_country_id is None:
-#         raise ValueError("Unable to resolve flag country id for: %r" % flag_country)
-
-#     vessel_type = contract_details.get('Vessel type / DWT')
-#     if not vessel_type or ' / ' not in vessel_type:
-#         raise ValueError("Missing or unsupported Vessel type / DWT format: %r" % vessel_type)
-
-#     type_id = get_id(local_vessel_types, vessel_type.rsplit(' / ',1)[0].strip(), 'vessel_types')
-#     if type_id is None:
-#         raise ValueError("Unable to resolve vessel type id for: %r" % vessel_type)
-
-#     session = _get_session()
-#     url = f'{API_BASE_URL}/vessels/historical'
-#     payload = {
-#         "name": name,
-#         "imo_no": 'No info',
-#         "type_id": type_id,
-#         "gt": 1,
-#         "flag_country_id": flag_country_id
-#     }
-
-#     response = session.post(url, json=payload)
-#     logger.debug("Response status: %s", response.status_code)
-#     logger.debug("Response text: %s", response.text)
-#     response.raise_for_status()
-#     return response.json()
-
-# refactored
 
 def _validate_new_vessel_input(contract_details: dict) -> tuple[str, str]:
     name_and_flag = contract_details.get("Vessel Name / Flag")
@@ -498,7 +445,6 @@ def _add_new_vessel(contract_details: dict, local_vessel_types: dict):
     payload = _build_historical_vessel_payload(name, type_id, flag_country_id)
     return _create_historical_vessel(payload)
 
-# ******* refactor end
 
 # для одного запроса работает
 def add_historical_contract(sea_service: dict, seafarer_uuid: str, ranks, local_vessel_types):
