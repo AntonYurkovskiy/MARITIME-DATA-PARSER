@@ -14,6 +14,82 @@ def get_html_content(file_path):
     return soup
 
 
+def parse_main_additional_section(table):
+    title_row = table.find('tr', class_='cv-title')
+    if not title_row:
+        return None
+
+    table_title = title_row.get_text(strip=True)
+    if table_title not in ['Main info', 'Additional info']:
+        return None
+
+    keys = [
+        text_cleaning(td.get_text(strip=True))
+        for td in table.find_all('td', class_='col-title')
+    ]
+
+    values = [
+        [text_cleaning(div.get_text(strip=True)) for div in td.find_all('div')]
+        if td.find_all('div') else text_cleaning(td.get_text(strip=True))
+        for td in table.find_all('td', class_='cv-content')
+    ]
+
+    return table_title, dict(zip(keys, values))
+
+
+def parse_biometrics_section(table):
+    title_row = table.find('tr', class_='cv-title')
+    if not title_row:
+        return None
+
+    table_title = title_row.get_text(strip=True)
+    if table_title != 'Biometrics':
+        return None
+
+    section_data = {}
+    rows = table.find_all('tr')
+    for row in rows[1:]:
+        cells = row.find_all('td')
+        for cell in cells:
+            text = cell.get_text(strip=True)
+            parts = text.split(':', 1)
+            if len(parts) > 1:
+                section_data[parts[0]] = parts[1]
+            else:
+                section_data[parts[0]] = None
+
+    return table_title, section_data
+
+
+def parse_generic_table_section(table):
+    title_row = table.find('tr', class_='cv-title')
+    if not title_row:
+        return None
+
+    table_title = title_row.get_text(strip=True)
+    if table_title in ['Main info', 'Additional info', 'Biometrics']:
+        return None
+
+    rows = table.find_all('tr')
+    if len(rows) < 2:
+        return table_title, None
+
+    headers = [th.get_text(strip=True) for th in rows[1].find_all(['td', 'th'])]
+    if not headers:
+        return table_title, None
+
+    section_data = []
+    for row in rows[2:]:
+        cells = row.find_all(['td', 'th'])
+        if len(cells) == len(headers):
+            row_dict = dict(
+                zip(headers, [text_cleaning(cell.get_text(strip=True)) for cell in cells])
+            )
+            section_data.append(row_dict)
+
+    return table_title, section_data
+
+
 def main_parser(soup):
     """Парсит все таблицы (кроме Notes) и сохраняет данные в словарь 
 
@@ -23,80 +99,26 @@ def main_parser(soup):
     Returns:
         dict: Общий словарь по всем таблицам 
     """
-
     all_sections = {}
-
     tables = soup.find_all('table')
 
     for table in tables:
-        title_row = table.find('tr', class_='cv-title')
-        if title_row:
+        parsed = parse_main_additional_section(table)
+        if parsed is not None:
+            table_title, section_data = parsed
+            all_sections[table_title] = section_data
+            continue
 
-            table_title = title_row.get_text(strip=True)
+        parsed = parse_biometrics_section(table)
+        if parsed is not None:
+            table_title, section_data = parsed
+            all_sections[table_title] = section_data
+            continue
 
-            # Если найдены таблицы 'Main info','Additional info':
-            if table_title in ['Main info','Additional info']:
-
-                # находим все ключи
-                keys = [
-                        text_cleaning(td.get_text(strip=True))
-                        for td
-                        # таблицу  'Main info' находим по классу
-                        in table.find_all('td', class_='col-title')
-                        # in soup.find('table', class_='cv-body').find_all('td', class_='col-title')
-                        ]
-                # находим все значения
-                values = [
-
-                        [text_cleaning(div.get_text(strip=True)) for div in td.find_all('div')]
-                        if td.find_all('div') else text_cleaning(td.get_text(strip=True))
-                    for td
-                    in table.find_all('td', class_='cv-content')
-                    # in soup.find('table', class_='cv-body').find_all('td', class_='cv-content')
-                    ]
-                # пакуем в словарь
-                section_data = dict(zip(keys,values))
-
-                all_sections[table_title] = section_data
-
-
-            # парсинг таблицы Biometrics
-            elif table_title == 'Biometrics':
-                section_data = {}
-                rows = table.find_all('tr')
-                for row in rows[1:]:
-                    cells = row.find_all('td')
-                    for cell in cells:
-                        text = cell.get_text(strip=True)
-                        if len(text.split(':'))>1:
-                            section_data[text.split(':')[0]] = text.split(':')[1]
-                        else:
-                            section_data[text.split(':')[0]] = None
-
-                all_sections[table_title] = section_data
-
-            # парсинг остальных таблиц ДОКУМЕНТЫ И СТАЖ
-            else:
-                rows = table.find_all('tr')
-                if len(rows) < 2:
-                    all_sections[table_title] = None
-                    continue
-
-                # Заголовки ИЗ ПЕРВОЙ строки данных (rows[1])
-                headers = [th.get_text(strip=True) for th in rows[1].find_all(['td', 'th'])]
-                if not headers:
-                    all_sections[table_title] = None
-                    continue
-
-                # Данные начиная со ВТОРОЙ строки данных (rows[2:])
-                section_data = []
-                for row in rows[2:]:
-                    cells = row.find_all(['td', 'th'])
-                    if len(cells) == len(headers):
-                        row_dict = dict(zip(headers, [text_cleaning(cell.get_text(strip=True)) for cell in cells]))
-                        section_data.append(row_dict)
-
-                all_sections[table_title] = section_data
+        parsed = parse_generic_table_section(table)
+        if parsed is not None:
+            table_title, section_data = parsed
+            all_sections[table_title] = section_data
 
     return all_sections
 
