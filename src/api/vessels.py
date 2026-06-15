@@ -375,55 +375,130 @@ def post_historical_contract(url: str, payload: dict):
     response.raise_for_status()
     return response.json()
 
+# ******* refactor start
 
-def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
-    name_and_flag = contract_details.get('Vessel Name / Flag')
+# for refactor
+
+# def _add_new_vessel(contract_details:dict, local_vessel_types:dict):
+#     name_and_flag = contract_details.get('Vessel Name / Flag')
+#     if not name_and_flag:
+#         raise ValueError("Missing Vessel Name / Flag in historical contract entry")
+
+#     if ' / ' not in name_and_flag:
+#         raise ValueError("Unsupported Vessel Name / Flag format: %r" % name_and_flag)
+
+#     name = simple_cleaned_vessel_name(name_and_flag.rsplit(' / ',1)[0].strip()).upper()
+#     flag_country = name_and_flag.rsplit(' / ',1)[1].strip()
+
+#     flag_search = search_geo(flag_country)
+#     if flag_search:
+#         flag_country_id = flag_search[0]['id']
+#     else:
+#         mapped_flag = get_value(flag_country)
+#         if not mapped_flag:
+#             raise ValueError("Unable to resolve vessel flag country: %r" % flag_country)
+#         flag_search = search_geo(mapped_flag)
+#         flag_country_id = flag_search[0]['id'] if flag_search else None
+
+#     if flag_country_id is None:
+#         raise ValueError("Unable to resolve flag country id for: %r" % flag_country)
+
+#     vessel_type = contract_details.get('Vessel type / DWT')
+#     if not vessel_type or ' / ' not in vessel_type:
+#         raise ValueError("Missing or unsupported Vessel type / DWT format: %r" % vessel_type)
+
+#     type_id = get_id(local_vessel_types, vessel_type.rsplit(' / ',1)[0].strip(), 'vessel_types')
+#     if type_id is None:
+#         raise ValueError("Unable to resolve vessel type id for: %r" % vessel_type)
+
+#     session = _get_session()
+#     url = f'{API_BASE_URL}/vessels/historical'
+#     payload = {
+#         "name": name,
+#         "imo_no": 'No info',
+#         "type_id": type_id,
+#         "gt": 1,
+#         "flag_country_id": flag_country_id
+#     }
+
+#     response = session.post(url, json=payload)
+#     logger.debug("Response status: %s", response.status_code)
+#     logger.debug("Response text: %s", response.text)
+#     response.raise_for_status()
+#     return response.json()
+
+# refactored
+
+def _validate_new_vessel_input(contract_details: dict) -> tuple[str, str]:
+    name_and_flag = contract_details.get("Vessel Name / Flag")
     if not name_and_flag:
         raise ValueError("Missing Vessel Name / Flag in historical contract entry")
 
-    if ' / ' not in name_and_flag:
-        raise ValueError("Unsupported Vessel Name / Flag format: %r" % name_and_flag)
+    if " / " not in name_and_flag:
+        raise ValueError(f"Unsupported Vessel Name / Flag format: {name_and_flag!r}")
 
-    name = simple_cleaned_vessel_name(name_and_flag.rsplit(' / ',1)[0].strip()).upper()
-    flag_country = name_and_flag.rsplit(' / ',1)[1].strip()
+    vessel_name_raw, flag_country = name_and_flag.rsplit(" / ", 1)
+    name = simple_cleaned_vessel_name(vessel_name_raw.strip()).upper()
+    return name, flag_country.strip()
 
+
+def _resolve_flag_country_id(flag_country: str) -> int:
     flag_search = search_geo(flag_country)
     if flag_search:
-        flag_country_id = flag_search[0]['id']
-    else:
-        mapped_flag = get_value(flag_country)
-        if not mapped_flag:
-            raise ValueError("Unable to resolve vessel flag country: %r" % flag_country)
-        flag_search = search_geo(mapped_flag)
-        flag_country_id = flag_search[0]['id'] if flag_search else None
+        return flag_search[0]["id"]
 
-    if flag_country_id is None:
-        raise ValueError("Unable to resolve flag country id for: %r" % flag_country)
+    mapped_flag = get_value(flag_country)
+    if not mapped_flag:
+        raise ValueError(f"Unable to resolve vessel flag country: {flag_country!r}")
 
-    vessel_type = contract_details.get('Vessel type / DWT')
-    if not vessel_type or ' / ' not in vessel_type:
-        raise ValueError("Missing or unsupported Vessel type / DWT format: %r" % vessel_type)
+    flag_search = search_geo(mapped_flag)
+    if not flag_search:
+        raise ValueError(f"Unable to resolve flag country id for: {flag_country!r}")
 
-    type_id = get_id(local_vessel_types, vessel_type.rsplit(' / ',1)[0].strip(), 'vessel_types')
+    return flag_search[0]["id"]
+
+
+def _resolve_vessel_type_id(contract_details: dict, local_vessel_types: dict) -> int:
+    vessel_type = contract_details.get("Vessel type / DWT")
+    if not vessel_type or " / " not in vessel_type:
+        raise ValueError(f"Missing or unsupported Vessel type / DWT format: {vessel_type!r}")
+
+    vessel_type_name = vessel_type.rsplit(" / ", 1)[0].strip()
+    type_id = get_id(local_vessel_types, vessel_type_name, "vessel_types")
     if type_id is None:
-        raise ValueError("Unable to resolve vessel type id for: %r" % vessel_type)
+        raise ValueError(f"Unable to resolve vessel type id for: {vessel_type!r}")
 
-    session = _get_session()
-    url = f'{API_BASE_URL}/vessels/historical'
-    payload = {
+    return type_id
+
+
+def _build_historical_vessel_payload(name: str, type_id: int, flag_country_id: int) -> dict:
+    return {
         "name": name,
-        "imo_no": 'No info',
+        "imo_no": "No info",
         "type_id": type_id,
         "gt": 1,
-        "flag_country_id": flag_country_id
+        "flag_country_id": flag_country_id,
     }
 
+
+def _create_historical_vessel(payload: dict) -> dict:
+    session = _get_session()
+    url = f"{API_BASE_URL}/vessels/historical"
     response = session.post(url, json=payload)
     logger.debug("Response status: %s", response.status_code)
     logger.debug("Response text: %s", response.text)
     response.raise_for_status()
     return response.json()
 
+
+def _add_new_vessel(contract_details: dict, local_vessel_types: dict):
+    name, flag_country = _validate_new_vessel_input(contract_details)
+    flag_country_id = _resolve_flag_country_id(flag_country)
+    type_id = _resolve_vessel_type_id(contract_details, local_vessel_types)
+    payload = _build_historical_vessel_payload(name, type_id, flag_country_id)
+    return _create_historical_vessel(payload)
+
+# ******* refactor end
 
 # для одного запроса работает
 def add_historical_contract(sea_service: dict, seafarer_uuid: str, ranks, local_vessel_types):
