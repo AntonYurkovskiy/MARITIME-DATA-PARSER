@@ -90,35 +90,29 @@ def parse_generic_table_section(table):
     return table_title, section_data
 
 
+def _store_parsed_section(all_sections: dict, parsed_result):
+    if parsed_result is not None:
+        table_title, section_data = parsed_result
+        all_sections[table_title] = section_data
+        return True
+    return False
+
+# TODO:[refactor] нужна ли константа PARSERS 
+
+PARSERS = (
+    parse_main_additional_section,
+    parse_biometrics_section,
+    parse_generic_table_section,
+)
+
 def main_parser(soup):
-    """Парсит все таблицы (кроме Notes) и сохраняет данные в словарь 
-
-    Args:
-        soup (bs4.BeautifulSoup): html файл обработанный с помощью BeautifulSoup(html_content, 'html.parser')
-
-    Returns:
-        dict: Общий словарь по всем таблицам 
-    """
     all_sections = {}
     tables = soup.find_all('table')
 
     for table in tables:
-        parsed = parse_main_additional_section(table)
-        if parsed is not None:
-            table_title, section_data = parsed
-            all_sections[table_title] = section_data
-            continue
-
-        parsed = parse_biometrics_section(table)
-        if parsed is not None:
-            table_title, section_data = parsed
-            all_sections[table_title] = section_data
-            continue
-
-        parsed = parse_generic_table_section(table)
-        if parsed is not None:
-            table_title, section_data = parsed
-            all_sections[table_title] = section_data
+        for parser in PARSERS:
+            if _store_parsed_section(all_sections, parser(table)):
+                break  # как только один парсер сработал — переходим к следующей таблице
 
     return all_sections
 
