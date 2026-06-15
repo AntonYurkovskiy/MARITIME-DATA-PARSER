@@ -14,7 +14,46 @@ from src.utils.mapping import get_value
 from src.utils.validators import _normalize, simple_cleaned_vessel_name
 
 
-def search_vessel(vessel_name:str, source:str, route: str):
+def _build_search_payload(vessel_name: str, source: str) -> dict:
+    return {
+        "pagination": {"page": 1, "per_page": 25},
+        "filters": {
+            "combinator": "or",
+            "rules": [
+                {
+                    "field": "details_history.name",
+                    "operator": "contains",
+                    "value": vessel_name,
+                },
+                {
+                    "field": "name",
+                    "operator": "contains",
+                    "value": vessel_name,
+                },
+                {
+                    "field": "imo_no",
+                    "operator": "contains",
+                    "value": vessel_name,
+                },
+            ],
+        },
+        "metadata": {"source": source},
+    }
+
+
+def _send_search_request(search_url: str, payload: dict) -> dict:
+    session = _get_session()
+    response = session.post(search_url, json=payload)
+    response.raise_for_status()
+    return response.json()
+
+
+def _get_search_url(route: str) -> str:
+    url = f"{API_BASE_URL}/vessels"
+    return f"{url}{route}"
+
+
+def search_vessel(vessel_name: str, source: str, route: str):
     """Ищет данные о судне с названием vessel_name
     в базе данных с параметром source
     расположенной на сервере по ручке route
@@ -27,32 +66,9 @@ def search_vessel(vessel_name:str, source:str, route: str):
     Returns:
         dict: ответ сервера с результатами поискового запроса
     """
-    session = _get_session()  # Кэшированная сессия
-
-    url = f'{API_BASE_URL}/vessels'
-
-    search_url = f"{url}{route}"
-
-    payload = {
-        "pagination":{"page":1,"per_page":25},
-        "filters":
-            {
-                "combinator":"or",
-                "rules":[
-                    {"field":"details_history.name","operator":"contains","value":vessel_name},
-                    {"field":"name","operator":"contains","value":vessel_name},
-                    {"field":"imo_no","operator":"contains","value":vessel_name}
-                    ]
-                },
-            "metadata":{"source":source}
-            }
-
-    response = session.post(search_url, json=payload)
-    # print(response.status_code)
-    response.raise_for_status()
-    return response.json()
-
-
+    search_url = _get_search_url(route)
+    payload = _build_search_payload(vessel_name, source)
+    return _send_search_request(search_url, payload)
 
 
 def _extract_items(result):
