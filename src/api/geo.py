@@ -1,11 +1,13 @@
 # ПОИСК В ГЕОГРАФИЧЕСКИХ СЛОВАРЯХ
+from typing import Any, Callable, Dict, List, Optional
 import logging
-logger = logging.getLogger(__name__)
+
 from src.api.client import _get_session
 from src.config import API_BASE_URL
 from src.domain.languages import COUNTRY_TO_LANGUAGE
 from src.utils.validators import only_letters_regex
 
+logger = logging.getLogger(__name__)
 
 def search_geo(search_term: str, geo_type: str = "countries") -> list:
     """Поиск в geo словарях"""
@@ -105,26 +107,67 @@ def get_resident_country(search_term: str, citizenship: str):
         return None
 
 
-def resolve_country_by_code(country_code: str, resident_country_id, nationality_country_id, search_geo_func):
+def search_country_by_code(
+    country_code: str,
+    search_geo_func: Callable[[str, str], Optional[List[Dict[str, Any]]]],
+) -> List[Dict[str, Any]]:
+    """
+    Поиск стран по коду через переданную функцию search_geo_func.
+    Возвращает список результатов (может быть пустым).
+    """
     results = search_geo_func(country_code, "countries") or []
+    return results
+
+
+def resolve_ambiguities(
+    results: List[Dict[str, Any]],
+    resident_country_id: Optional[int],
+    nationality_country_id: Optional[int],
+) -> Optional[Dict[str, Any]]:
+    """
+    Разрешает неоднозначности:
+      - если одна страна, возвращает её;
+      - если несколько, сначала ищет по resident_country_id,
+        затем по nationality_country_id;
+      - если ничего не выбрано, возвращает None.
+    """
+    if not results:
+        return None
 
     if len(results) == 1:
-        item = results[0]
-        return {
-            "country_id": item.get("id"),
-            "dial_code": item.get("dial_code"),
-            "is_ambiguous": False,
-            "matches": results,
-        }
+        return results[0]
 
+    # сначала ищем по resident_country_id
     chosen = next(
         (x for x in results if x.get("id") == resident_country_id),
-        None
-    ) or next(
-        (x for x in results if x.get("id") == nationality_country_id),
-        None
-    ) or (results[0] if results else None)
+        None,
+    )
 
+    # если не нашли, ищем по nationality_country_id
+    if chosen is None:
+        chosen = next(
+            (x for x in results if x.get("id") == nationality_country_id),
+            None,
+        )
+
+    # если всё ещё ничего, берём первый результат
+    if chosen is None:
+        chosen = results[0]
+
+    return chosen
+
+
+def build_country_resolution_result(
+    chosen: Optional[Dict[str, Any]],
+    results: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Строит итоговый словарь результата:
+      - country_id
+      - dial_code
+      - is_ambiguous
+      - matches
+    """
     if not chosen:
         return {
             "country_id": None,
@@ -133,9 +176,27 @@ def resolve_country_by_code(country_code: str, resident_country_id, nationality_
             "matches": [],
         }
 
+    # неоднозначность снимается только если ровно один результат
+    is_ambiguous = len(results) != 1
+
     return {
         "country_id": chosen.get("id"),
         "dial_code": chosen.get("dial_code"),
-        "is_ambiguous": True,
+        "is_ambiguous": is_ambiguous,
         "matches": results,
     }
+
+
+def resolve_country_by_code(
+    country_code: str,
+    resident_country_id,
+    nationality_country_id,
+    search_geo_func,
+) -> Dict[str, Any]:
+    """
+    Фасад: поиск по коду + разрешение неоднозначностей + выбор приоритетного результата.
+    """
+    results = search_country_by_code(country_code, search_geo_func)
+    chosen = resolve_ambiguities(results, resident_country_id, nationality_country_id)
+    return build_country_resolution_result(chosen, results)
+
