@@ -1,7 +1,7 @@
 # tests/api/test_seafarers.py
 
 import pytest
-from unittest.mock import MagicMock, patch, Mock
+from unittest.mock import MagicMock, patch
 from io import BytesIO
 import requests
 

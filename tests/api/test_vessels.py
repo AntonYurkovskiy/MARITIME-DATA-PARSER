@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from src.api.vessels import (
     _extract_items,
     _get_vessel_name,

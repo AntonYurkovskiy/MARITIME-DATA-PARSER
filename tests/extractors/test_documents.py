@@ -1,5 +1,4 @@
 # test_documents.py
-import pytest
 from src.extractors.documents import get_personal_id_by_passport, get_ranks
 from src.utils.validators import only_letters_digits_spaces
 

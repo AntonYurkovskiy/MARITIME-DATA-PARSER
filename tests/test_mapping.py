@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from src.utils.mapping import ( 
-    DEFAULT_MAPPING_FILE,
     normalize_key,
     load_mapping,
     save_mapping,

@@ -1,5 +1,4 @@
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from src.api.geo import (
     search_geo,
     search_geo_exact,

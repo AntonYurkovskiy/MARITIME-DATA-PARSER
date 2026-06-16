@@ -1,7 +1,6 @@
 from bs4 import BeautifulSoup
 import pytest
 
-from src.utils.validators import text_cleaning
 from src.parsers.html import get_html_content
 from src.parsers.html import parse_notes
 
@@ -36,7 +35,6 @@ def test_get_html_content_raises_file_not_found(tmp_path):
 
     # функция должна пробросить стандартную ошибку FileNotFoundError
     # (вы её не ловите в коде — значит, её поведение такое)
-    import pytest
 
     with pytest.raises(FileNotFoundError):
         get_html_content(file_path)

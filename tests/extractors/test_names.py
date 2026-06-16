@@ -2,7 +2,7 @@
 NAME_UTILS_MODULE = "src.extractors.names"
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 from importlib import import_module
 
 

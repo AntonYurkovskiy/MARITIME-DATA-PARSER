@@ -1,5 +1,5 @@
 import pytest
-from typing import Any, Optional
+from typing import Optional
 
 from src.extractors.emails import find_emails
 from src.utils.validators import (

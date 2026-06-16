@@ -1,7 +1,4 @@
 # test_emails.py
-import pytest
-import re
-from typing import Any
 from src.extractors.emails import find_emails, get_emails_list
 
 
