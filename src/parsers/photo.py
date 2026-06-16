@@ -3,62 +3,7 @@ import io
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-# **** START REFACTORING ****
-# **** BEFORE ****
 
-# def get_photo(soup, save_dir="out_manual", filename="photo.jpg"):
-#     td = soup.find('td', class_='cvAvatar')
-#     if not td:
-#         return None
-
-#     img = td.find('img')
-#     if not img:
-#         return None
-
-#     src = img.get('src')
-#     if not src or ',' not in src:
-#         return None
-
-#     header, data64 = src.split(',', 1)
-#     if not header.startswith('data:'):
-#         return None
-
-#     mime_type = header.split(';', 1)[0].split(':', 1)[1]
-#     image_bytes = base64.b64decode(data64)
-
-#     if data64.startswith('iVBORw0KGgoAAAANSUhEUgAAARgAAAEZCAY'):
-#         return None
-
-#     ext = {
-#         "image/jpeg": ".jpg",
-#         "image/png": ".png",
-#         "image/gif": ".gif",
-#         "image/webp": ".webp",
-#     }.get(mime_type, ".bin")
-
-
-#     # ********************************************
-#     # сделать версию без сохранения на диск,
-#     # а просто возвращать байты и mime_type
-#     # для дальнейшей обработки
-#     save_path = Path(save_dir)
-#     save_path.mkdir(parents=True, exist_ok=True)
-
-#     full_path = save_path / Path(filename).with_suffix(ext)
-#     with open(full_path, "wb") as f:
-#         f.write(image_bytes)
-#     # ********************************************
-    
-    
-#     return {
-#         "mime_type": mime_type,
-#         "file_obj": io.BytesIO(image_bytes),
-#         "filename": full_path.name,
-#         "saved_path": str(full_path), # удалить из версии без сохранения
-#     }
-
-
-# **** AFTER ****
 def _extract_base64_image(soup) -> Optional[Tuple[bytes, str]]:
     """Находит base64‑картинку в soup, возвращает (image_bytes, mime_type) или None."""
     td = soup.find('td', class_='cvAvatar')
@@ -160,4 +105,4 @@ def get_photo(soup, save_dir: str = "out_manual", filename: str = "photo.jpg") -
 #         filename=filename,
 #         saved_path=None,
 #     )
-# **** END REFACTORING ****
+# **** END TODO ****
