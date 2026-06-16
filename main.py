@@ -2,13 +2,13 @@ import importlib
 import logging
 from pathlib import Path
 
-# import functions
+
 from src.api.dicts import get_dict
 from src.api.geo import get_resident_country, search_geo
 from src.api.seafarers import add_seafarer, get_id, upload_seafarer_photo
 from src.api.vessels import add_historical_contract
 from src.config import INPUT_DIR
-from src.domain.builder import build_seafarer_dict
+from src.domain.builder import SeafarerInput, build_seafarer_dict
 from src.domain.languages import country_to_language
 from src.extractors.dates import extract_date_to_iso
 from src.extractors.documents import get_personal_id_by_passport, get_ranks
@@ -19,8 +19,6 @@ from src.parsers.html import get_html_content, main_parser, parse_notes
 # from src.domain.languages import (
 #     get_languages,
 # )
-
-# importlib.reload(functions)
 
 
 
