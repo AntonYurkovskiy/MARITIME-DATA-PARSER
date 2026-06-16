@@ -93,19 +93,42 @@ def build_seafarer_dict(
     )
 
     return _build_seafarer_dict_from_input(data)
-# ***** END REFACTOR ****
 
-def stringify_id_fields(data: dict) -> dict:
-    result = {}
+
+# def stringify_id_fields(data: dict) -> dict:
+#     result = {}
+#     for key, value in data.items():
+#         if isinstance(value, dict):
+#             result[key] = stringify_id_fields(value)
+#         elif isinstance(value, list):
+#             result[key] = [
+#                 stringify_id_fields(x) if isinstance(x, dict) else x
+#                 for x in value
+#             ]
+#         elif key.endswith("_id") and value is not None:
+#             result[key] = str(value)
+#         else:
+#             result[key] = value
+#     return result
+
+
+
+
+def stringify_id_fields(data: Dict[str, Any]) -> Dict[str, Any]:
+    result: Dict[str, Any] = {}
     for key, value in data.items():
         if isinstance(value, dict):
+            # рекурсивно обрабатываем вложенные словари
             result[key] = stringify_id_fields(value)
         elif isinstance(value, list):
-            result[key] = [
+            # список может содержать словари и любые другие элементы
+            processed_list: List[Any] = [
                 stringify_id_fields(x) if isinstance(x, dict) else x
                 for x in value
             ]
+            result[key] = processed_list
         elif key.endswith("_id") and value is not None:
+            # поля *_id приводим к строке
             result[key] = str(value)
         else:
             result[key] = value
