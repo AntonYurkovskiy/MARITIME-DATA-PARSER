@@ -32,7 +32,9 @@ def only_letters_regex(text) -> Optional[str]:
     return result if result else None
 
 
-def clean_letters_commas(text) -> Optional[str]:
+# def clean_letters_commas(text) -> Optional[str]:
+# def clean_letters_commas(text: str) -> str:
+def clean_letters_commas(text: Optional[str]) -> Optional[str]:
     """
     Оставляет только буквы и запятые:
     - Удаляет пробелы после букв и перед запятыми
@@ -40,7 +42,7 @@ def clean_letters_commas(text) -> Optional[str]:
     """
     # Проверка на пустую строку
     if not text:
-        return None
+        return None  #"" 
 
     # Этап 1: Оставляем ТОЛЬКО буквы, запятые и пробелы
     text = re.sub(r'[^а-яА-ЯёЁa-zA-Z,\s]', '', text)
@@ -60,7 +62,7 @@ def clean_letters_commas(text) -> Optional[str]:
     # Этап 6: Удаляем пробелы в начале/конце
     result = text.strip()
 
-    return result if result else None
+    return result if result else None  #""
 
 # def find_emails(text) -> list[Any]:>>> .\src\extractors\emails.py
 
