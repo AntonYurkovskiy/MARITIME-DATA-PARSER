@@ -1,10 +1,9 @@
 import re
-from typing import Any
+import logging
+from typing import Any, Dict, List, Optional, Tuple
 
 from rapidfuzz import fuzz, utils
 
-import logging
-logger = logging.getLogger(__name__)
 from src.api.client import _get_session
 from src.api.geo import search_geo
 from src.api.seafarers import get_id
@@ -13,8 +12,10 @@ from src.extractors.dates import extract_date_to_iso
 from src.utils.mapping import get_value
 from src.utils.validators import _normalize, simple_cleaned_vessel_name
 
+logger = logging.getLogger(__name__)
 
-def _build_search_payload(vessel_name: str, source: str) -> dict:
+
+def _build_search_payload(vessel_name: str, source: str) -> Dict[str, Any]:
     return {
         "pagination": {"page": 1, "per_page": 25},
         "filters": {
@@ -41,7 +42,7 @@ def _build_search_payload(vessel_name: str, source: str) -> dict:
     }
 
 
-def _send_search_request(search_url: str, payload: dict) -> dict:
+def _send_search_request(search_url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     session = _get_session()
     response = session.post(search_url, json=payload)
     response.raise_for_status()
@@ -53,37 +54,31 @@ def _get_search_url(route: str) -> str:
     return f"{url}{route}"
 
 
-def search_vessel(vessel_name: str, source: str, route: str):
-    """Ищет данные о судне с названием vessel_name
-    в базе данных с параметром source
-    расположенной на сервере по ручке route
-
-    Args:
-        vessel_name (str): Название судна
-        source (str): тип источника для параметра metadata
-        route (str): ручка где на сервере расположена база данных
-
-    Returns:
-        dict: ответ сервера с результатами поискового запроса
-    """
+def search_vessel(vessel_name: str, source: str, route: str) -> Dict[str, Any]:
     search_url = _get_search_url(route)
     payload = _build_search_payload(vessel_name, source)
     return _send_search_request(search_url, payload)
 
 
-def _extract_items(result):
+def _extract_items(result: Any) -> List[Dict[str, Any]]:
     if isinstance(result, dict):
-        return result.get("items", []) or []
+        items = result.get("items", []) or []
+        if isinstance(items, list):
+            return items
+        return []
     if isinstance(result, list):
         return result
     return []
 
 
-def _get_vessel_name(item):
+def _get_vessel_name(item: Any) -> str:
     if not isinstance(item, dict):
         return ""
 
     details = item.get("details_history") or {}
+    if not isinstance(details, dict):
+        details = {}
+
     return (
         item.get("name")
         or details.get("name")
@@ -92,19 +87,18 @@ def _get_vessel_name(item):
     )
 
 
-def _name_variants(vessel_name: str):
+def _name_variants(vessel_name: str) -> List[str]:
     parts = _normalize(vessel_name).split()
-
-    variants = [vessel_name]
+    variants: List[str] = [vessel_name]
 
     if len(parts) >= 2:
-        variants.append(parts[0])          # prince
-        variants.append(parts[-1])         # bassel
-        variants.append(" ".join(parts[:2]))   # prince bassel
-        variants.append(" ".join(parts[-2:]))  # prince bassel
+        variants.append(parts[0])
+        variants.append(parts[-1])
+        variants.append(" ".join(parts[:2]))
+        variants.append(" ".join(parts[-2:]))
 
     seen = set()
-    result = []
+    result: List[str] = []
     for v in variants:
         v = v.strip()
         if v and v.lower() not in seen:
@@ -113,9 +107,14 @@ def _name_variants(vessel_name: str):
     return result
 
 
-def _best_fuzzy_item(query: str, items: list):
-    best_item = None
-    best_score = -1
+from typing import Optional, Dict, Any, List, Tuple
+
+def _best_fuzzy_item(
+    query: str,
+    items: List[Dict[str, Any]],
+) -> Tuple[Optional[Dict[str, Any]], int]:
+    best_item: Optional[Dict[str, Any]] = None
+    best_score: int = -1
 
     for item in items:
         candidate = _get_vessel_name(item)
@@ -128,6 +127,8 @@ def _best_fuzzy_item(query: str, items: list):
             processor=utils.default_process,
             score_cutoff=0,
         )
+        
+        score = int(score)
 
         if score > best_score:
             best_score = score
@@ -136,169 +137,144 @@ def _best_fuzzy_item(query: str, items: list):
     return best_item, best_score
 
 
-def find_exact_vessel_uuid(vessel_name: str, sources: list):
-    """Поиск судна по точному совпадению полного имени.
-    
-    Args:
-        vessel_name: Полное имя для поиска
-        sources: Список кортежей (source, route)
-    
-    Returns:
-        tuple: (best_item, best_source, best_score)
-    """
-    best_item = None
-    best_source = None
-    best_score = -1
-    
+def find_exact_vessel_uuid(
+    vessel_name: str,
+    sources: List[Tuple[str, str]],
+) -> Tuple[Optional[Dict[str, Any]], Optional[str], int]:
+    best_item: Optional[Dict[str, Any]] = None
+    best_source: Optional[str] = None
+    best_score: int = -1
+
     for source, route in sources:
         result = search_vessel(vessel_name, source, route)
         items = _extract_items(result)
-        
+
         if items:
-            # Ищем точное совпадение
             for item in items:
                 candidate = _get_vessel_name(item)
                 if not candidate:
                     continue
-                
+
                 if _normalize(candidate) == _normalize(vessel_name):
-                    return item, source, 100  # Точное совпадение - макс балл
-            
-            # Если точного нет, ищем лучший fuzzy match в результатах
-            item, score = _best_fuzzy_item(vessel_name, items)
-            if item and score > best_score:
-                best_item = item
+                    return item, source, 100
+
+            tmp_item, score = _best_fuzzy_item(vessel_name, items)
+            if tmp_item and score > best_score:
+                best_item = tmp_item
                 best_source = source
                 best_score = score
-    
+
     return best_item, best_source, best_score
 
 
-def search_by_name_variants(vessel_name: str, sources: list, best_item, best_source, best_score):
-    """Поиск судна по вариантам имени (первое слово, последнее, пары слов).
-    
-    Args:
-        vessel_name: Полное имя для поиска вариантов
-        sources: Список кортежей (source, route)
-        best_item, best_source, best_score: Лучший результат из предыдущего поиска
-    
-    Returns:
-        tuple: (best_item, best_source, best_score)
-    """
+def search_by_name_variants(
+    vessel_name: str,
+    sources: List[Tuple[str, str]],
+    best_item: Optional[Dict[str, Any]],
+    best_source: Optional[str],
+    best_score: int,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str], int]:
     for query in _name_variants(vessel_name):
         if _normalize(query) == _normalize(vessel_name):
             continue
-        
+
         for source, route in sources:
             result = search_vessel(query, source, route)
             items = _extract_items(result)
-            
+
             if not items:
                 continue
-            
+
             for item in items:
                 candidate = _get_vessel_name(item)
                 if not candidate:
                     continue
-                
+
                 score = fuzz.WRatio(
                     vessel_name,
                     candidate,
                     processor=utils.default_process,
                     score_cutoff=0,
                 )
-                
+                score = int(score)
+
                 if score > best_score:
                     best_item = item
                     best_source = source
                     best_score = score
-    
+
     return best_item, best_source, best_score
 
 
-def get_vessel_uuid(vessel_name: str):
-    """Ищет UUID судна: сначала exact match, затем fuzzy search по вариантам имени.
-    
-    Args:
-        vessel_name: Название судна для поиска
-    
-    Returns:
-        tuple: (uuid, source, item) или (None, None, None)
-    """
-    sources = [
+def get_vessel_uuid(
+    vessel_name: str,
+) -> Tuple[Optional[str], Optional[str], Optional[Dict[str, Any]]]:
+    sources: List[Tuple[str, str]] = [
         ("historical", "/historical/search"),
         ("main", "/search"),
         ("external", "/search"),
     ]
-    
-    # Phase 1: поиск по полному имени (exact + fuzzy)
+
+    best_item: Optional[Dict[str, Any]] = None
+    best_source: Optional[str] = None
+    best_score: int = -1
+
     best_item, best_source, best_score = find_exact_vessel_uuid(vessel_name, sources)
-    
-    # Если найдено точное совпадение, возвращаем сразу
-    if best_item and best_score >= 100:
+
+    if best_item and best_score >= 100 and best_source:
         return best_item.get("uuid"), best_source, best_item
-    
-    # Phase 2: поиск по вариантам имени
+
     best_item, best_source, best_score = search_by_name_variants(
         vessel_name, sources, best_item, best_source, best_score
     )
-    
-    # Принимаем результат если score >= 80
-    if best_item and best_score >= 80:
+
+    if best_item and best_score >= 80 and best_source:
         return best_item.get("uuid"), best_source, best_item
-    
+
     return None, None, None
 
 
-def resolve_historical_vessel(cleaned_vessel_name: str, raw_vessel_name: str, local_vessel_types: dict):
-    """Разрешает UUID исторического судна: поиск или создание.
-    
-    Returns:
-        tuple: (vessel_uuid, source)
-    """
-    vessel_uuid = None
-    source = 'historical'
-    
+def resolve_historical_vessel(
+    cleaned_vessel_name: str,
+    raw_vessel_name: str,
+    local_vessel_types: Dict[str, Any],
+) -> Tuple[str, str]:
+    vessel_uuid: Optional[str] = None
+    source = "historical"
+
     if cleaned_vessel_name:
         vessel_uuid, search_source, _ = get_vessel_uuid(cleaned_vessel_name)
-        # Если найдено не-историческое судно, создаём историческое
-        if search_source != 'historical':
+        if search_source and search_source != "historical":
             logger.debug(
                 "Historical contract vessel lookup returned non-historical source=%s; creating historical vessel",
                 search_source,
             )
             vessel_uuid = None
-    
+
     if not vessel_uuid:
-        # Создаём новое историческое судно
         created_vessel = _add_new_vessel(
-            {'Vessel Name / Flag': raw_vessel_name, 'Vessel type / DWT': raw_vessel_name},
-            local_vessel_types
+            {"Vessel Name / Flag": raw_vessel_name, "Vessel type / DWT": raw_vessel_name},
+            local_vessel_types,
         )
         vessel_uuid = (
-            created_vessel.get('inserted', {}).get('uuid') 
-            or created_vessel.get('uuid') 
-            or created_vessel.get('id')
+            created_vessel.get("inserted", {}).get("uuid")
+            or created_vessel.get("uuid")
+            or created_vessel.get("id")
         )
-    
+
     if not vessel_uuid:
         raise ValueError("Unable to resolve or create vessel UUID for historical contract")
-    
+
     return vessel_uuid, source
 
 
-def parse_contract_period(contract_period: str):
-    """Парсит период контракта (From - Till) в две ISO даты.
-    
-    Returns:
-        tuple: (sign_on_date, sign_off_date)
-    """
+def parse_contract_period(contract_period: str) -> Tuple[str, str]:
     if not contract_period or not isinstance(contract_period, str):
         raise ValueError("Missing or invalid From - Till value: %r" % contract_period)
 
     period_parts = [
-        part.strip() 
-        for part in re.split(r'\s*[-–—]\s*', contract_period, maxsplit=1) 
+        part.strip()
+        for part in re.split(r"\s*[-–—]\s*", contract_period, maxsplit=1)
         if part.strip()
     ]
     if len(period_parts) < 2:
@@ -314,52 +290,40 @@ def parse_contract_period(contract_period: str):
             "Unable to parse contract dates from From - Till: %r (on=%r off=%r)"
             % (contract_period, sign_on_date, sign_off_date)
         )
-    
+
     return sign_on_date, sign_off_date
 
 
 def build_historical_contract_payload(
-    seafarer_uuid: str, 
-    rank_id: str, 
-    vessel_uuid: str, 
-    source: str, 
-    sign_on_date: str, 
+    seafarer_uuid: str,
+    rank_id: str,
+    vessel_uuid: str,
+    source: str,
+    sign_on_date: str,
     sign_off_date: str,
-    raw_vessel_name: str
-):
-    """Формирует payload для контракта.
-    
-    Returns:
-        dict: готовый payload для API
-    """
+    raw_vessel_name: str,
+) -> Dict[str, Any]:
     if not raw_vessel_name:
         raise ValueError("Missing Vessel Name / Flag for historical contract entry")
 
-    payload = {
+    return {
         "is_historical": True,
         "seafarer_uuid": seafarer_uuid,
         "rank_id": rank_id,
         "vessel": {
             "uuid": vessel_uuid,
-            "source": source
+            "source": source,
         },
         "is_automatic": True,
         "sign_on_date": sign_on_date,
         "sign_off_date": sign_off_date,
         "off_reason_id": 0,
         "is_historical": 1,
-        "details": "Imported from CV"
+        "details": "Imported from CV",
     }
-    
-    return payload
 
 
-def post_historical_contract(url: str, payload: dict):
-    """Отправляет контракт на API и возвращает ответ.
-    
-    Returns:
-        dict: ответ сервера
-    """
+def post_historical_contract(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     session = _get_session()
     logger.debug("Posting historical contract: %s", payload)
 
@@ -376,7 +340,7 @@ def post_historical_contract(url: str, payload: dict):
     return response.json()
 
 
-def _validate_new_vessel_input(contract_details: dict) -> tuple[str, str]:
+def _validate_new_vessel_input(contract_details: Dict[str, Any]) -> Tuple[str, str]:
     name_and_flag = contract_details.get("Vessel Name / Flag")
     if not name_and_flag:
         raise ValueError("Missing Vessel Name / Flag in historical contract entry")
@@ -405,7 +369,10 @@ def _resolve_flag_country_id(flag_country: str) -> int:
     return flag_search[0]["id"]
 
 
-def _resolve_vessel_type_id(contract_details: dict, local_vessel_types: dict) -> int:
+def _resolve_vessel_type_id(
+    contract_details: Dict[str, Any],
+    local_vessel_types: Dict[str, Any],
+) -> int:
     vessel_type = contract_details.get("Vessel type / DWT")
     if not vessel_type or " / " not in vessel_type:
         raise ValueError(f"Missing or unsupported Vessel type / DWT format: {vessel_type!r}")
@@ -418,7 +385,11 @@ def _resolve_vessel_type_id(contract_details: dict, local_vessel_types: dict) ->
     return type_id
 
 
-def _build_historical_vessel_payload(name: str, type_id: int, flag_country_id: int) -> dict:
+def _build_historical_vessel_payload(
+    name: str,
+    type_id: int,
+    flag_country_id: int,
+) -> Dict[str, Any]:
     return {
         "name": name,
         "imo_no": "No info",
@@ -428,7 +399,7 @@ def _build_historical_vessel_payload(name: str, type_id: int, flag_country_id: i
     }
 
 
-def _create_historical_vessel(payload: dict) -> dict:
+def _create_historical_vessel(payload: Dict[str, Any]) -> Dict[str, Any]:
     session = _get_session()
     url = f"{API_BASE_URL}/vessels/historical"
     response = session.post(url, json=payload)
@@ -438,7 +409,10 @@ def _create_historical_vessel(payload: dict) -> dict:
     return response.json()
 
 
-def _add_new_vessel(contract_details: dict, local_vessel_types: dict):
+def _add_new_vessel(
+    contract_details: Dict[str, Any],
+    local_vessel_types: Dict[str, Any],
+) -> Dict[str, Any]:
     name, flag_country = _validate_new_vessel_input(contract_details)
     flag_country_id = _resolve_flag_country_id(flag_country)
     type_id = _resolve_vessel_type_id(contract_details, local_vessel_types)
@@ -446,54 +420,75 @@ def _add_new_vessel(contract_details: dict, local_vessel_types: dict):
     return _create_historical_vessel(payload)
 
 
-# для одного запроса работает
-def add_historical_contract(sea_service: dict, seafarer_uuid: str, ranks, local_vessel_types):
-    """Добавляет данные о контракте на 360Crew API"""
-    rank_id = get_id(ranks, sea_service.get('Position'), 'ranks')
+def add_historical_contract(
+    sea_service: Dict[str, Any],
+    seafarer_uuid: str,
+    ranks: Dict[str, Any],
+    local_vessel_types: Dict[str, Any],
+) -> Dict[str, Any]:
+    rank_id = get_id(ranks, sea_service.get("Position"), "ranks")
     if not rank_id:
-        raise ValueError("Missing rank_id for historical contract position: %s" % sea_service.get('Position'))
+        raise ValueError(
+            "Missing rank_id for historical contract position: %s" % sea_service.get("Position")
+        )
 
-    raw_vessel_name = sea_service.get('Vessel Name / Flag')
-    cleaned_vessel_name = simple_cleaned_vessel_name(raw_vessel_name) if raw_vessel_name else None
-
-    # 1. Разрешить UUID судна
-    vessel_uuid, source = resolve_historical_vessel(cleaned_vessel_name, raw_vessel_name, local_vessel_types)
-
-    # 2. Парсить период контракта
-    contract_period = sea_service.get('From - Till')
-    sign_on_date, sign_off_date = parse_contract_period(contract_period)
-
-    # 3. Построить payload
-    url = f'{API_BASE_URL}/contracts/historical'
-    payload = build_historical_contract_payload(
-        seafarer_uuid, rank_id, vessel_uuid, source, 
-        sign_on_date, sign_off_date, raw_vessel_name
+    raw_vessel_name_any = sea_service.get("Vessel Name / Flag")
+    cleaned_vessel_name_any = (
+        simple_cleaned_vessel_name(raw_vessel_name_any) if raw_vessel_name_any else None
     )
 
-    # 4. Отправить контракт
+    raw_vessel_name = raw_vessel_name_any or ""
+    cleaned_vessel_name = cleaned_vessel_name_any or ""
+
+    vessel_uuid, source = resolve_historical_vessel(
+        cleaned_vessel_name,
+        raw_vessel_name,
+        local_vessel_types,
+    )
+
+    contract_period_any = sea_service.get("From - Till")
+    contract_period = contract_period_any or ""
+
+    sign_on_date, sign_off_date = parse_contract_period(contract_period)
+
+    url = f"{API_BASE_URL}/contracts/historical"
+    payload = build_historical_contract_payload(
+        seafarer_uuid,
+        str(rank_id),
+        vessel_uuid,
+        source,
+        sign_on_date,
+        sign_off_date,
+        raw_vessel_name,
+    )
+
     return post_historical_contract(url, payload)
 
 
-def search_external_vessel(name_or_imo: str) -> list[dict[str, Any]]:
+def search_external_vessel(name_or_imo: Optional[str]) -> Optional[List[Dict[str, Any]]]:
     if not name_or_imo:
+        # Тесты ожидают None для пустой строки и None
         return None
-    else:
-        session = _get_session()
 
-        url = f'{API_BASE_URL}/vessels/search'
-        payload = {
-            "pagination": {"page": 1, "per_page": 25},
-            "filters": {
-                "combinator": "or",
-                "rules": [
-                    {"field": "name", "operator": "contains", "value": name_or_imo},
-                    {"field": "imo_no", "operator": "contains", "value": name_or_imo},
-                ],
-            },
-            "metadata": {"external": True},
-        }
+    session = _get_session()
 
-        response = session.post(url, json=payload)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("items", [])
+    url = f"{API_BASE_URL}/vessels/search"
+    payload = {
+        "pagination": {"page": 1, "per_page": 25},
+        "filters": {
+            "combinator": "or",
+            "rules": [
+                {"field": "name", "operator": "contains", "value": name_or_imo},
+                {"field": "imo_no", "operator": "contains", "value": name_or_imo},
+            ],
+        },
+        "metadata": {"external": True},
+    }
+
+    response = session.post(url, json=payload)
+    response.raise_for_status()
+    data = response.json()
+    items = data.get("items", []) or []
+    if isinstance(items, list):
+        return items
+    return []
