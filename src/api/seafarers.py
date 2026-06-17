@@ -11,7 +11,7 @@ from src.config import API_BASE_URL, API_TIMEOUT
 from src.domain.builder import stringify_id_fields
 
 
-def add_seafarer(main:dict[str, any])-> dict[str, any]:
+def add_seafarer(main:dict[str, Any])-> dict[str, Any]:
     """Добавляет данные о моряке на 360Crew API"""
     session = _get_session()  
 
