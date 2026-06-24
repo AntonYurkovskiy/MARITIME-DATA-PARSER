@@ -1,0 +1,112 @@
+blocks:
+  main_info:
+    enabled: false
+    order: 1
+    parser: parse_main_info_raw
+    transformer: normalize_main_info
+    payload_builder: build_main_info_payload
+    validator: validate_main_info
+    endpoint: /seafarers/
+    method: POST
+    required: true
+    retry_max: 3
+    depends_on: []
+    context_keys:
+      - seafarer_uuid
+      - photo
+
+  addresses:
+    enabled: false
+    order: 2
+    parser: parse_addresses_raw
+    transformer: normalize_addresses
+    payload_builder: build_addresses_payload
+    validator: validate_addresses
+    endpoint: /seafarers/{seafarer_uuid}/addresses
+    method: POST
+    required: false
+    retry_max: 2
+    depends_on:
+      - main_info
+    context_keys:
+      - seafarer_uuid
+
+  certificates:
+    enabled: false
+    order: 3
+    parser: parse_certificates_raw
+    transformer: normalize_certificates
+    payload_builder: build_certificates_payload
+    validator: validate_certificates
+    endpoint: /seafarers/{seafarer_uuid}/certificates
+    method: POST
+    required: false
+    retry_max: 2
+    depends_on:
+      - main_info
+    context_keys:
+      - seafarer_uuid
+
+  relatives:
+    enabled: false
+    order: 4
+    parser: parse_relatives_raw
+    transformer: normalize_relatives
+    payload_builder: build_relatives_payload
+    validator: validate_relatives
+    endpoint: /seafarers/{seafarer_uuid}/relatives
+    method: POST
+    required: false
+    retry_max: 2
+    depends_on:
+      - main_info
+    context_keys:
+      - seafarer_uuid
+
+  sea_service:
+    enabled: false
+    order: 5
+    parser: parse_sea_service_raw
+    transformer: normalize_sea_service
+    payload_builder: build_contracts_payloads
+    validator: validate_contracts
+    endpoint: /contracts/historical
+    method: POST
+    required: false
+    retry_max: 2
+    depends_on:
+      - main_info
+    context_keys:
+      - seafarer_uuid
+
+  photo:
+    enabled: false
+    order: 6
+    parser: parse_photo_raw
+    transformer: normalize_photo
+    payload_builder: build_photo_payload
+    validator: validate_photo
+    endpoint: /seafarers/{seafarer_uuid}/main
+    method: PUT
+    required: false
+    retry_max: 1
+    depends_on:
+      - main_info
+    context_keys:
+      - seafarer_uuid
+
+  documents:
+    enabled: false
+    order: 7
+    parser: parse_documents_raw
+    transformer: normalize_documents
+    payload_builder: build_documents_payload
+    validator: validate_documents
+    endpoint: /seafarers/{seafarer_uuid}/documents
+    method: POST
+    required: false
+    retry_max: 1
+    depends_on:
+      - main_info
+    context_keys:
+      - seafarer_uuid
