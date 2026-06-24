@@ -28,6 +28,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _count_uploaded_addresses(sync_status) -> int:
+    """Count successfully sent address payloads for a single file sync result."""
+    block = sync_status.blocks.get("addresses")
+    if not block or block.status != BlockStatus.SUCCESS:
+        return 0
+
+    data = block.data
+    if isinstance(data, list):
+        return len(data)
+    if isinstance(data, dict):
+        return 1
+    return 0
+
+
 def get_config_path() -> str:
     """Get path to blocks configuration YAML file."""
     config_path = Path(__file__).parent / "src" / "orchestration" / "blocks_config.yaml"
@@ -67,6 +81,8 @@ def process_all_files(html_files, config, output_dir=None):
     success_count = 0
     failed_count = 0
     skipped_count = 0
+    uploaded_addresses_count = 0
+    files_with_uploaded_addresses = 0
     results = []
 
     logger.info("=" * 70)
@@ -94,6 +110,11 @@ def process_all_files(html_files, config, output_dir=None):
                 skipped_count += 1
                 logger.warning("⏭️  File processing skipped")
 
+            addresses_for_file = _count_uploaded_addresses(sync_status)
+            uploaded_addresses_count += addresses_for_file
+            if addresses_for_file > 0:
+                files_with_uploaded_addresses += 1
+
         except Exception as e:
             failed_count += 1
             logger.error("❌ Exception processing file %s: %s", Path(html_file).name, e)
@@ -117,6 +138,8 @@ def process_all_files(html_files, config, output_dir=None):
     logger.info("✅ Successfully processed: %d files", success_count)
     logger.info("❌ Failed: %d files", failed_count)
     logger.info("⏭️  Skipped: %d files", skipped_count)
+    logger.info("🏠 Uploaded addresses: %d", uploaded_addresses_count)
+    logger.info("📄 Files with uploaded addresses: %d", files_with_uploaded_addresses)
     logger.info("📊 Total: %d files", len(html_files))
     logger.info("=" * 70)
 
@@ -136,12 +159,9 @@ def main():
         logger.error("❌ Failed to load configuration: %s", e)
         return
 
-    # Enable desired blocks (you can customize which blocks to enable)
-    # Option 1: Enable only main_info and sea_service
-    # enable_blocks(config, ["main_info", "sea_service"])
-    
-    # Option 2: Enable all blocks
-    enable_blocks(config)
+    # Enable only implemented blocks by default.
+    # This keeps main_orchestration.py focused on blocks that are production-ready.
+    enable_blocks(config, ["main_info", "addresses", "sea_service", "photo"])
 
     # Get HTML files to process
     html_files = sorted([str(p) for p in Path(INPUT_DIR).rglob("*.html")])
