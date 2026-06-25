@@ -102,7 +102,7 @@ blocks:
     transformer: normalize_documents
     payload_builder: build_documents_payload
     validator: validate_documents
-    endpoint: /seafarers/{seafarer_uuid}/documents
+    endpoint: /seafarers/{seafarer_uuid}/certificates
     method: POST
     required: false
     retry_max: 1

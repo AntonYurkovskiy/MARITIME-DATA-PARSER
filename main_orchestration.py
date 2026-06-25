@@ -208,7 +208,7 @@ def main():
 
     # Enable only implemented blocks by default.
     # This keeps main_orchestration.py focused on blocks that are production-ready.
-    enable_blocks(config, ["main_info", "addresses", "relatives", "sea_service", "photo"])
+    enable_blocks(config, ["main_info", "addresses", "relatives", "sea_service", "photo", "documents"])
 
     # Get HTML files to process
     html_files = sorted([str(p) for p in Path(INPUT_DIR).rglob("*.html")])
