@@ -185,7 +185,8 @@ def validate_main_info(normalized: Dict[str, Any]) -> Tuple[bool, List[str]]:
     Requires at least: name, surname, rank_id, gender_id, date_of_birth.
     """
     errors = []
-
+    
+    # TODO:DRY it with list or tuple of required fields
     if not normalized.get("name"):
         errors.append("name is required")
     if not normalized.get("surname"):

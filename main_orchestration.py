@@ -12,13 +12,14 @@ Compare results with the legacy approach:
 """
 
 import logging
+import time
 from pathlib import Path
 from datetime import datetime
 
 from src.config import INPUT_DIR
 from src.orchestration.loader import load_blocks_config
 from src.orchestration.pipeline import process_seafarer_sync
-from src.orchestration.result import save_sync_report, log_sync_summary
+from src.orchestration.result import save_sync_report
 from src.orchestration.blocks import BlockStatus
 
 logging.basicConfig(
@@ -40,6 +41,18 @@ def _count_uploaded_addresses(sync_status) -> int:
     if isinstance(data, dict):
         return 1
     return 0
+
+
+def _format_duration(seconds: float) -> str:
+    """Format seconds into HH:MM:SS or Dd HH:MM:SS."""
+    total_seconds = max(0, int(round(seconds)))
+    days, rem = divmod(total_seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, secs = divmod(rem, 60)
+
+    if days > 0:
+        return f"{days}d {hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
 def get_config_path() -> str:
@@ -84,6 +97,7 @@ def process_all_files(html_files, config, output_dir=None):
     uploaded_addresses_count = 0
     files_with_uploaded_addresses = 0
     results = []
+    total_start = time.perf_counter()
 
     logger.info("=" * 70)
     logger.info("🚀 Starting orchestration pipeline processing")
@@ -120,11 +134,38 @@ def process_all_files(html_files, config, output_dir=None):
             logger.error("❌ Exception processing file %s: %s", Path(html_file).name, e)
             continue
 
+    total_elapsed_sec = time.perf_counter() - total_start
+    avg_per_file_sec = total_elapsed_sec / len(html_files) if html_files else 0.0
+
+    est_5k_sec = avg_per_file_sec * 5000
+    est_100k_sec = avg_per_file_sec * 100000
+    est_500k_sec = avg_per_file_sec * 500000
+    est_1m_sec = avg_per_file_sec * 1000000
+
+    run_metrics = {
+        "total_elapsed_seconds": total_elapsed_sec,
+        "total_elapsed_human": _format_duration(total_elapsed_sec),
+        "average_seconds_per_file": avg_per_file_sec,
+        "average_human_per_file": _format_duration(avg_per_file_sec),
+        "estimated_seconds": {
+            "5000": est_5k_sec,
+            "100000": est_100k_sec,
+            "500000": est_500k_sec,
+            "1000000": est_1m_sec,
+        },
+        "estimated_human": {
+            "5000": _format_duration(est_5k_sec),
+            "100000": _format_duration(est_100k_sec),
+            "500000": _format_duration(est_500k_sec),
+            "1000000": _format_duration(est_1m_sec),
+        },
+    }
+
     # Save results to JSON report
     if output_dir:
         output_path = Path(output_dir) / f"orchestration_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         try:
-            save_sync_report(results, str(output_path))
+            save_sync_report(results, str(output_path), run_metrics=run_metrics)
             logger.info("")
             logger.info("💾 Report saved to: %s", output_path)
         except Exception as e:
@@ -141,6 +182,12 @@ def process_all_files(html_files, config, output_dir=None):
     logger.info("🏠 Uploaded addresses: %d", uploaded_addresses_count)
     logger.info("📄 Files with uploaded addresses: %d", files_with_uploaded_addresses)
     logger.info("📊 Total: %d files", len(html_files))
+    logger.info("⏱️ Total elapsed (actual): %s", _format_duration(total_elapsed_sec))
+    logger.info("⏱️ Average per file: %.2f sec (%s)", avg_per_file_sec, _format_duration(avg_per_file_sec))
+    logger.info("🔮 Estimated for 5,000 files: %s", _format_duration(est_5k_sec))
+    logger.info("🔮 Estimated for 100,000 files: %s", _format_duration(est_100k_sec))
+    logger.info("🔮 Estimated for 500,000 files: %s", _format_duration(est_500k_sec))
+    logger.info("🔮 Estimated for 1,000,000 files: %s", _format_duration(est_1m_sec))
     logger.info("=" * 70)
 
     return results
@@ -161,7 +208,7 @@ def main():
 
     # Enable only implemented blocks by default.
     # This keeps main_orchestration.py focused on blocks that are production-ready.
-    enable_blocks(config, ["main_info", "addresses", "sea_service", "photo"])
+    enable_blocks(config, ["main_info", "addresses", "relatives", "sea_service", "photo"])
 
     # Get HTML files to process
     html_files = sorted([str(p) for p in Path(INPUT_DIR).rglob("*.html")])
