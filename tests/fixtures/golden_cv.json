@@ -45,28 +45,32 @@
       "No.": "07762/2023/08",
       "Date of issue": "20.09.2023",
       "Country of issue": "Ukraine",
-      "Valid up": "20.09.2028"
+      "Valid up": "20.09.2028",
+      "Rank": "GMDSS operator"
     },
     {
       "Title of document": "Endorsement",
       "No.": "",
       "Date of issue": "20.09.2023",
       "Country of issue": "",
-      "Valid up": "20.09.2028"
+      "Valid up": "20.09.2028",
+      "Rank": "GMDSS operator"
     },
     {
       "Title of document": "Professional license",
       "No.": "20381/2024",
       "Date of issue": "29.01.2024",
       "Country of issue": "Ukraine",
-      "Valid up": "29.01.2029"
+      "Valid up": "29.01.2029",
+      "Rank": "Master"
     },
     {
       "Title of document": "Endorsement",
       "No.": "",
       "Date of issue": "29.01.2024",
       "Country of issue": "",
-      "Valid up": "29.01.2029"
+      "Valid up": "29.01.2029",
+      "Rank": "Master"
     }
   ],
   "Certificates": [

@@ -61,6 +61,18 @@ def parse_biometrics_section(table):
     return table_title, section_data
 
 
+def _extract_rank_from_tbody(tbody):
+    """Извлекает значение Rank из первой строки tbody"""
+    rows = tbody.find_all('tr')
+    if rows and rows[0].find('td', class_='strong'):
+        first_cell = rows[0].find('td', class_='strong')
+        if first_cell and first_cell.get_text(strip=True) == 'Rank':
+            rank_cell = rows[0].find('td', class_='cv-content')
+            if rank_cell:
+                return text_cleaning(rank_cell.get_text(strip=True))
+    return None
+
+
 def parse_generic_table_section(table):
     title_row = table.find('tr', class_='cv-title')
     if not title_row:
@@ -79,13 +91,32 @@ def parse_generic_table_section(table):
         return table_title, None
 
     section_data = []
-    for row in rows[2:]:
-        cells = row.find_all(['td', 'th'])
-        if len(cells) == len(headers):
-            row_dict = dict(
-                zip(headers, [text_cleaning(cell.get_text(strip=True)) for cell in cells])
-            )
-            section_data.append(row_dict)
+    
+    # Специальная обработка для Diplomas с Rank в отдельных tbody
+    if table_title == 'Diplomas':
+        tbodies = table.find_all('tbody')
+        for tbody in tbodies:
+            if tbody.get('class') and 'diplomaRow' in tbody.get('class', []):
+                rank = _extract_rank_from_tbody(tbody)
+                rows_data = tbody.find_all('tr')[1:]  # Пропускаем первую строку с Rank
+                
+                for row in rows_data:
+                    cells = row.find_all(['td', 'th'])
+                    if len(cells) == len(headers):
+                        row_dict = dict(
+                            zip(headers, [text_cleaning(cell.get_text(strip=True)) for cell in cells])
+                        )
+                        if rank:
+                            row_dict['Rank'] = rank
+                        section_data.append(row_dict)
+    else:
+        for row in rows[2:]:
+            cells = row.find_all(['td', 'th'])
+            if len(cells) == len(headers):
+                row_dict = dict(
+                    zip(headers, [text_cleaning(cell.get_text(strip=True)) for cell in cells])
+                )
+                section_data.append(row_dict)
 
     return table_title, section_data
 
