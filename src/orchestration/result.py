@@ -5,7 +5,7 @@ Provides functions to save, log, and summarize sync results.
 """
 
 import json
-from typing import List
+from typing import List, Dict, Any, Optional
 from pathlib import Path
 import logging
 
@@ -18,13 +18,18 @@ def _status_to_text(status: BlockStatus) -> str:
     return status.value if isinstance(status, BlockStatus) else str(status)
 
 
-def save_sync_report(results: List[SyncStatus], output_path: str) -> str:
+def save_sync_report(
+    results: List[SyncStatus],
+    output_path: str,
+    run_metrics: Optional[Dict[str, Any]] = None,
+) -> str:
     """
     Save synchronization results to JSON report file.
 
     Args:
         results: List of SyncStatus objects
         output_path: Path to save report JSON file
+        run_metrics: Optional top-level execution metrics to include in report
 
     Returns:
         Path to saved report file
@@ -48,6 +53,9 @@ def save_sync_report(results: List[SyncStatus], output_path: str) -> str:
             for item in results
         ],
     }
+
+    if run_metrics:
+        payload["run_metrics"] = run_metrics
 
     with report_path.open("w", encoding="utf-8") as file_obj:
         json.dump(payload, file_obj, ensure_ascii=False, indent=2)
