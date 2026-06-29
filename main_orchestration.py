@@ -18,9 +18,10 @@ from datetime import datetime
 
 from src.config import INPUT_DIR
 from src.orchestration.loader import load_blocks_config
-from src.orchestration.pipeline import process_seafarer_sync
+from src.orchestration.pipeline import process_seafarer_sync, log_block_timing_summary
 from src.orchestration.result import save_sync_report
 from src.orchestration.blocks import BlockStatus
+from src.api.client import log_retry_stats
 
 logging.basicConfig(
     level=logging.INFO,
@@ -189,6 +190,12 @@ def process_all_files(html_files, config, output_dir=None):
     logger.info("🔮 Estimated for 500,000 files: %s", _format_duration(est_500k_sec))
     logger.info("🔮 Estimated for 1,000,000 files: %s", _format_duration(est_1m_sec))
     logger.info("=" * 70)
+
+    # Log block timing summary
+    log_block_timing_summary()
+    
+    # Log retry statistics
+    log_retry_stats()
 
     return results
 

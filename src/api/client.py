@@ -5,8 +5,22 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import os
 from functools import lru_cache
+import time
 
 logger = logging.getLogger(__name__)
+
+# Retry statistics
+_retry_stats = {
+    "total_attempts": 0,
+    "total_retries": 0,
+    "total_retry_time": 0.0
+}
+
+# HTTP request counter
+_http_stats = {
+    "total_requests": 0,
+    "start_time": None,
+}
 
 @lru_cache(maxsize=1)
 def _get_session():
@@ -23,7 +37,26 @@ def create_session_with_retries():
     """Создаёт requests.Session с настроенной стратегией retry."""
     session = requests.Session()
 
-    retry_strategy = Retry(
+    # Wrap request method to track HTTP call count
+    _original_request = session.request
+    def _tracked_request(method, url, **kwargs):
+        if _http_stats["start_time"] is None:
+            _http_stats["start_time"] = time.perf_counter()
+        _http_stats["total_requests"] += 1
+        return _original_request(method, url, **kwargs)
+    session.request = _tracked_request
+
+    # Custom retry strategy with tracking
+    class RetryWithStats(Retry):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+        
+        def increment(self, *args, **kwargs):
+            _retry_stats["total_attempts"] += 1
+            _retry_stats["total_retries"] += 1
+            return super().increment(*args, **kwargs)
+
+    retry_strategy = RetryWithStats(
         total=10,
         backoff_factor=1,  
         status_forcelist=[429, 502, 503, 504],
@@ -32,6 +65,31 @@ def create_session_with_retries():
     session.mount("http://", adapter)
     session.mount("https://", adapter)
     return session
+
+
+def get_retry_stats() -> dict:
+    """Get retry statistics."""
+    return _retry_stats.copy()
+
+
+def log_retry_stats():
+    """Log retry and HTTP request statistics summary."""
+    logger.info("=" * 70)
+    logger.info("📊 HTTP REQUEST STATISTICS")
+    logger.info("=" * 70)
+    total_req = _http_stats["total_requests"]
+    start = _http_stats["start_time"]
+    if total_req > 0 and start is not None:
+        elapsed = time.perf_counter() - start
+        rps = total_req / elapsed if elapsed > 0 else 0
+        logger.info(f"� Total HTTP requests: {total_req}")
+        logger.info(f"⏱️  Elapsed time: {elapsed:.1f}s")
+        logger.info(f"🚀 Average RPS: {rps:.2f} req/sec")
+    else:
+        logger.info("📊 No HTTP statistics available")
+    if _retry_stats["total_retries"] > 0:
+        logger.info(f"� Retries: {_retry_stats['total_retries']}")
+    logger.info("=" * 70)
 
 
 def login_and_set_auth_headers(session):

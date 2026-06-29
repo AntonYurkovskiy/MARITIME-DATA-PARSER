@@ -9,6 +9,8 @@ from __future__ import annotations
 from typing import Dict, Any, Tuple
 import logging
 from urllib.parse import urljoin
+import time
+import functools
 
 import requests
 
@@ -21,6 +23,68 @@ from src.orchestration.result import log_block_results, log_sync_summary
 from src.parsers.html import get_html_content, main_parser, parse_notes
 
 logger = logging.getLogger(__name__)
+
+# Registry is initialized lazily on first use (avoids API calls at import time)
+_registry = None
+
+# Block timing statistics
+_block_timings: Dict[str, list[float]] = {}
+
+
+def _time_block(func):
+    """Decorator to measure and log block execution time."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        # Extract block_name from block_spec (first positional arg for _process_block)
+        block_name = 'unknown'
+        if args and hasattr(args[0], 'get'):
+            block_name = args[0].get('name', 'unknown')
+        
+        start_time = time.perf_counter()
+        try:
+            result = func(*args, **kwargs)
+            elapsed = time.perf_counter() - start_time
+            
+            if block_name != 'unknown':
+                if block_name not in _block_timings:
+                    _block_timings[block_name] = []
+                _block_timings[block_name].append(elapsed)
+            
+            logger.debug(f"⏱️ Block '{block_name}' completed in {elapsed:.3f}s")
+            return result
+        except Exception as e:
+            elapsed = time.perf_counter() - start_time
+            logger.error(f"❌ Block '{block_name}' failed after {elapsed:.3f}s: {e}")
+            raise
+    return wrapper
+
+
+def log_block_timing_summary():
+    """Log summary statistics for block timings."""
+    if not _block_timings:
+        logger.info("📊 No block timing data collected")
+        return
+    
+    logger.info("=" * 70)
+    logger.info("📊 BLOCK TIMING SUMMARY")
+    logger.info("=" * 70)
+    
+    total_time = sum(sum(times) for times in _block_timings.values())
+    
+    for block_name, times in sorted(_block_timings.items(), key=lambda x: sum(x[1]), reverse=True):
+        block_total = sum(times)
+        block_avg = block_total / len(times)
+        block_count = len(times)
+        percentage = (block_total / total_time * 100) if total_time > 0 else 0
+        
+        logger.info(
+            f"📦 {block_name:20s} | count={block_count:3d} | "
+            f"total={block_total:7.3f}s | avg={block_avg:6.3f}s | {percentage:5.1f}%"
+        )
+    
+    logger.info("=" * 70)
+    logger.info(f"⏱️ Total time across all blocks: {total_time:.3f}s")
+    logger.info("=" * 70)
 
 
 def _sorted_block_specs(config: Dict[str, BlockSpec]):
@@ -128,6 +192,7 @@ def _adapt_payload_for_api(block_name: str, payload: Any, context: Dict[str, Any
     return adapted
 
 
+@_time_block
 def _process_block(
     block_spec: BlockSpec,
     raw_data: Dict[str, Any],
@@ -141,7 +206,7 @@ def _process_block(
     validator = registry.get(block_spec["validator"])
 
     parsed = parser(raw_data)
-    normalized = transformer(parsed)
+    normalized = transformer(parsed, context)
     is_valid, validation_errors = validator(normalized)
     if not is_valid:
         return BlockResult(
@@ -151,7 +216,10 @@ def _process_block(
             data={"parsed": parsed, "normalized": normalized},
         )
 
-    payload = payload_builder(normalized)
+    try:
+        payload = payload_builder(normalized, context)
+    except TypeError:
+        payload = payload_builder(normalized)
     payload = _adapt_payload_for_api(block_spec["name"], payload, context)
     endpoint = _format_endpoint(block_spec["endpoint"], context)
 
@@ -195,8 +263,11 @@ def _process_block(
 
 def process_seafarer_sync(html_file: str, config: Dict[str, BlockSpec]) -> SyncStatus:
     """Process one HTML file through the orchestration pipeline."""
-    populate_default_registry()
-    registry = get_registry()
+    global _registry
+    if _registry is None:
+        populate_default_registry()
+        _registry = get_registry()
+    registry = _registry
 
     soup = get_html_content(html_file)
     raw_data = main_parser(soup)
@@ -204,7 +275,13 @@ def process_seafarer_sync(html_file: str, config: Dict[str, BlockSpec]) -> SyncS
     if isinstance(raw_data, dict):
         raw_data["__soup"] = soup
     notes = parse_notes(soup)
-    context: Dict[str, Any] = {"notes": notes, "html_file": html_file}
+    
+    # Add intra-file cache to context for reusing computed values within the same file
+    context: Dict[str, Any] = {
+        "notes": notes, 
+        "html_file": html_file,
+        "_file_cache": {}  # Cache for computed values within this file
+    }
 
     results: Dict[str, BlockResult] = {}
     overall_status = BlockStatus.SUCCESS
