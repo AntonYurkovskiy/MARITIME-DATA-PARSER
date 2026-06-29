@@ -1,13 +1,18 @@
 # ПОИСК В ГЕОГРАФИЧЕСКИХ СЛОВАРЯХ
 from typing import Any, Callable, Dict, List, Optional
 import logging
+import os
 
 from src.api.client import _get_session
 from src.config import API_BASE_URL
 from src.domain.languages import COUNTRY_TO_LANGUAGE
 from src.utils.validators import only_letters_regex
+from src.cache import get_cache
 
 logger = logging.getLogger(__name__)
+
+# Allow disabling cache for tests
+_CACHE_DISABLED = os.getenv("DISABLE_CACHE", "false").lower() == "true"
 
 
 def search_geo(search_term: Optional[str], geo_type: str = "countries") -> Optional[List[Dict[str, Any]]]:
@@ -21,6 +26,16 @@ def search_geo(search_term: Optional[str], geo_type: str = "countries") -> Optio
     # Пустой ввод → None (как требуют тесты empty/None)
     if not search_term:
         return None
+
+    # Try to get from persistent cache first (unless cache disabled)
+    if not _CACHE_DISABLED:
+        cache = get_cache()
+        cache_key = f"geo:{geo_type}:{search_term}"
+        cached_result = cache.get(cache_key)
+        
+        if cached_result is not None:
+            logger.debug(f"✅ Cache hit for geo search: {search_term} ({geo_type})")
+            return cached_result
 
     session = _get_session()
 
@@ -39,6 +54,14 @@ def search_geo(search_term: Optional[str], geo_type: str = "countries") -> Optio
     if response.status_code == 200:
         data = response.json()
         logger.info("✅ Найдено: %s записей", len(data))
+        
+        # Cache the result (unless cache disabled)
+        if not _CACHE_DISABLED:
+            cache = get_cache()
+            cache_key = f"geo:{geo_type}:{search_term}"
+            cache.set(cache_key, data)
+            logger.debug(f"💾 Cached geo search: {search_term} ({geo_type})")
+        
         return data
 
     # HTTP-ошибка → [] (по тесту test_search_geo_http_error)

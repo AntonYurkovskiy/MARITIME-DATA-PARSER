@@ -1,8 +1,13 @@
 import logging
+import os
 from src.api.client import _get_session
 from src.config import API_BASE_URL
+from src.cache import get_cache, invalidate_cache
 
 logger = logging.getLogger(__name__)
+
+# Allow disabling cache for tests
+_CACHE_DISABLED = os.getenv("DISABLE_CACHE", "false").lower() == "true"
 
 def clean_languages(languages_list: list[dict]) -> list[dict]:
     """Очищает пустые + удаляет через API"""
@@ -33,24 +38,62 @@ def clean_languages(languages_list: list[dict]) -> list[dict]:
 
 def _add_value_in_dict(value: str, dict_name: str) -> dict:
     """Добавляет значение в словарь 360Crew API"""
-    session = _get_session()  # Кэшированная сессия
+    # Check if already cached to avoid duplicate additions (unless cache disabled)
+    if not _CACHE_DISABLED:
+        cache = get_cache()
+        cache_key = f"added:{dict_name}:{value.lower()}"
+        cached_result = cache.get(cache_key)
+        
+        if cached_result is not None:
+            logger.debug(f"✅ Cache hit for added value: {value} in {dict_name}")
+            return cached_result
+    
+    session = _get_session()
     url = f'{API_BASE_URL}/admin/dicts/{dict_name}'
 
     response = session.post(url, json={"value": value})
     response.raise_for_status()
-    return response.json()
+    result = response.json()
+    
+    # Cache the result to avoid duplicate additions (unless cache disabled)
+    if not _CACHE_DISABLED:
+        cache = get_cache()
+        cache_key = f"added:{dict_name}:{value.lower()}"
+        cache.set(cache_key, result)
+        logger.debug(f"💾 Cached added value: {value} in {dict_name}")
+    
+    return result
 
 # ПОЛУЧЕНИЕ СЛОВАРЯ ПО КЛЮЧУ
-# @lru_cache(maxsize=128) 
 def get_dict(key):
-    session = _get_session()  # Кэшированная сессия
+    # Try to get from persistent cache first (unless cache disabled)
+    if not _CACHE_DISABLED:
+        cache = get_cache()
+        cache_key = f"dict:{key}"
+        cached_result = cache.get(cache_key)
+        
+        if cached_result is not None:
+            logger.debug(f"✅ Cache hit for dict: {key}")
+            return cached_result
+    
+    # Cache miss - fetch from API
+    session = _get_session()
     domain = f'{API_BASE_URL}/dict/'
     url = domain + key
 
     try:
         response = session.get(url, timeout=(10, 30))
         response.raise_for_status()
-        return response.json()
+        result = response.json()
+        
+        # Cache the result (unless cache disabled)
+        if not _CACHE_DISABLED:
+            cache = get_cache()
+            cache_key = f"dict:{key}"
+            cache.set(cache_key, result)
+            logger.debug(f"💾 Cached dict: {key}")
+        
+        return result
     except Exception as e:
         logger.error("❌ Ошибка получения %s: %s", key, e)
         raise
