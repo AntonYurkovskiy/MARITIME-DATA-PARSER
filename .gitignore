@@ -7,6 +7,7 @@
 /extracted_images/
 /out_of_rep/
 /baks/
+./example.py
 
 __pycache__
 tz.md
