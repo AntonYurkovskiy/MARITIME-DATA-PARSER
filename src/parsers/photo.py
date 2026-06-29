@@ -86,23 +86,3 @@ def get_photo(soup, save_dir: str = "out_manual", filename: str = "photo.jpg") -
         filename=full_path.name,
         saved_path=full_path,
     )
-
-# TODO:[refactor]:сделать версию без сохранения на диск,
-# но надо править тесты, прототип ниже
-
-# def get_photo_in_memory(soup) -> Optional[Dict[str, Any]]:
-#     extracted = _extract_base64_image(soup)
-#     if not extracted:
-#         return None
-
-#     image_bytes, mime_type = extracted
-#     ext = _guess_extension(mime_type)
-#     filename = f"photo{ext}"
-
-#     return _build_photo_object(
-#         image_bytes=image_bytes,
-#         mime_type=mime_type,
-#         filename=filename,
-#         saved_path=None,
-#     )
-# **** END TODO ****

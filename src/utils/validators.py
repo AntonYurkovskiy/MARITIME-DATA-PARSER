@@ -32,17 +32,14 @@ def only_letters_regex(text) -> Optional[str]:
     return result if result else None
 
 
-# def clean_letters_commas(text) -> Optional[str]:
-# def clean_letters_commas(text: str) -> str:
 def clean_letters_commas(text: Optional[str]) -> Optional[str]:
     """
     Оставляет только буквы и запятые:
     - Удаляет пробелы после букв и перед запятыми
     - После запятых оставляет 1 пробел
     """
-    # Проверка на пустую строку
     if not text:
-        return None  #"" 
+        return None
 
     # Этап 1: Оставляем ТОЛЬКО буквы, запятые и пробелы
     text = re.sub(r'[^а-яА-ЯёЁa-zA-Z,\s]', '', text)
@@ -62,23 +59,20 @@ def clean_letters_commas(text: Optional[str]) -> Optional[str]:
     # Этап 6: Удаляем пробелы в начале/конце
     result = text.strip()
 
-    return result if result else None  #""
+    return result if result else None
 
-# def find_emails(text) -> list[Any]:>>> .\src\extractors\emails.py
 
 def only_letters_digits_spaces(text:str) -> bool:
     """Проверяет: только буквы, цифры, пробелы"""
     if not text:
         return False
-    # ^ начало, $ конец, [] любой из символов
     pattern = r'^[а-яА-ЯёЁa-zA-Z0-9\s]+$'
     return bool(re.match(pattern, text.strip()))
 
 
 def only_digits_spaces_plus_minus(text) -> bool:
     """Проверяет: только цифры, пробелы, плюсы, минусы"""
-    if not text:                   # Пустая строка → False
+    if not text:
         return False
-    # ^ начало, $ конец, [] любой из символов
     pattern = r'^[0-9+\-\s]+$'
-    return bool(re.match(pattern, text))#.strip()))
+    return bool(re.match(pattern, text))

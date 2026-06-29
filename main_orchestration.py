@@ -1,14 +1,19 @@
 """
-Alternative main script using the new orchestration layer.
+Main entry point for the orchestration pipeline.
 
-This script processes HTML resumes using the config-driven orchestration pipeline
-instead of the legacy hardcoded approach. It enables comparison of both methods.
+Processes HTML seafarer resumes from INPUT_DIR through a config-driven pipeline
+(blocks_config.yaml) and uploads structured data to the 360Crew API.
 
-Run this script to process files with the orchestration layer:
-    python main_orchestration.py
+Usage:
+    python main_orchestration.py                     # normal run (skips already processed files)
+    $env:REPROCESS_ALL="true"; python main_orchestration.py  # reset dedup and reprocess all
 
-Compare results with the legacy approach:
-    python main.py
+Environment variables:
+    CREWING_EMAIL       API login email
+    CREWING_PASSWORD    API login password
+    API_BASE_URL        API base URL (default: https://staffdev.360crewing.com/api/v1)
+    INPUT_DIR           Directory with HTML files (default: out/out_min)
+    REPROCESS_ALL       Set to "true" to reset deduplication tracker and reprocess all files
 """
 
 import logging

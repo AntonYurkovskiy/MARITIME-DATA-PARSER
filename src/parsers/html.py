@@ -3,11 +3,8 @@ from bs4 import BeautifulSoup
 from src.utils.validators import text_cleaning
 
 
-def get_html_content(file_path):
-    """
-    возвращает объект bs4 для дальнейшего обращения разными парсерами
-
-    """
+def get_html_content(file_path) -> BeautifulSoup:
+    """Read an HTML file and return a BeautifulSoup object for further parsing."""
     with open(file_path, 'r', encoding='utf-8') as f:
         html_content = f.read()
     soup = BeautifulSoup(html_content, 'html.parser')
@@ -128,15 +125,14 @@ def _store_parsed_section(all_sections: dict, parsed_result):
         return True
     return False
 
-# TODO:[refactor] нужна ли константа PARSERS 
-
 PARSERS = (
     parse_main_additional_section,
     parse_biometrics_section,
     parse_generic_table_section,
 )
 
-def main_parser(soup):
+def main_parser(soup) -> dict:
+    """Parse all table sections from a seafarer HTML resume into a dict keyed by section title."""
     all_sections = {}
     tables = soup.find_all('table')
 
