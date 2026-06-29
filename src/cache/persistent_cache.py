@@ -195,6 +195,84 @@ def invalidate_cache():
     logger.info("Global cache invalidated")
 
 
+class ProcessedFilesTracker:
+    """Tracks which files have been successfully processed to allow resume after interruption."""
+
+    def __init__(self, db_path: Optional[Path] = None):
+        self.db_path = db_path or CACHE_DB_PATH
+        self._init_table()
+
+    def _init_table(self):
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(str(self.db_path)) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS processed_files (
+                    filename TEXT PRIMARY KEY,
+                    status TEXT NOT NULL,
+                    processed_at REAL NOT NULL
+                )
+            """)
+            conn.commit()
+
+    def is_processed(self, filename: str) -> bool:
+        """Return True if file was already successfully processed."""
+        try:
+            with sqlite3.connect(str(self.db_path)) as conn:
+                cursor = conn.execute(
+                    "SELECT 1 FROM processed_files WHERE filename = ? AND status = 'success'",
+                    (filename,)
+                )
+                return cursor.fetchone() is not None
+        except Exception as e:
+            logger.warning(f"ProcessedFilesTracker.is_processed failed for '{filename}': {e}")
+            return False
+
+    def mark_processed(self, filename: str, status: str = "success"):
+        """Mark file as processed with given status."""
+        try:
+            with sqlite3.connect(str(self.db_path)) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO processed_files (filename, status, processed_at) VALUES (?, ?, ?)",
+                    (filename, status, time.time())
+                )
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"ProcessedFilesTracker.mark_processed failed for '{filename}': {e}")
+
+    def get_stats(self) -> dict:
+        """Return counts by status."""
+        try:
+            with sqlite3.connect(str(self.db_path)) as conn:
+                cursor = conn.execute(
+                    "SELECT status, COUNT(*) FROM processed_files GROUP BY status"
+                )
+                return {row[0]: row[1] for row in cursor.fetchall()}
+        except Exception as e:
+            logger.warning(f"ProcessedFilesTracker.get_stats failed: {e}")
+            return {}
+
+    def reset(self):
+        """Clear all records (use for full reprocess)."""
+        try:
+            with sqlite3.connect(str(self.db_path)) as conn:
+                conn.execute("DELETE FROM processed_files")
+                conn.commit()
+            logger.info("ProcessedFilesTracker reset: all records cleared")
+        except Exception as e:
+            logger.warning(f"ProcessedFilesTracker.reset failed: {e}")
+
+
+_global_tracker: Optional["ProcessedFilesTracker"] = None
+
+
+def get_processed_tracker() -> "ProcessedFilesTracker":
+    """Get or create global ProcessedFilesTracker instance."""
+    global _global_tracker
+    if _global_tracker is None:
+        _global_tracker = ProcessedFilesTracker()
+    return _global_tracker
+
+
 if __name__ == "__main__":
     # Test cache functionality
     cache = get_cache()

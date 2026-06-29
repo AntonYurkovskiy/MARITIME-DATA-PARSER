@@ -12,6 +12,7 @@ Compare results with the legacy approach:
 """
 
 import logging
+import os
 import time
 from pathlib import Path
 from datetime import datetime
@@ -22,6 +23,7 @@ from src.orchestration.pipeline import process_seafarer_sync, log_block_timing_s
 from src.orchestration.result import save_sync_report
 from src.orchestration.blocks import BlockStatus
 from src.api.client import log_retry_stats
+from src.cache import get_processed_tracker
 
 logging.basicConfig(
     level=logging.INFO,
@@ -95,20 +97,39 @@ def process_all_files(html_files, config, output_dir=None):
     success_count = 0
     failed_count = 0
     skipped_count = 0
+    dedup_skipped_count = 0
     uploaded_addresses_count = 0
     files_with_uploaded_addresses = 0
     results = []
     total_start = time.perf_counter()
 
+    tracker = get_processed_tracker()
+    reprocess_all = os.getenv("REPROCESS_ALL", "false").lower() == "true"
+    if reprocess_all:
+        logger.warning("🔄 REPROCESS_ALL=true: clearing processed files tracker")
+        tracker.reset()
+
+    tracker_stats = tracker.get_stats()
+    already_done = tracker_stats.get("success", 0)
+
     logger.info("=" * 70)
     logger.info("🚀 Starting orchestration pipeline processing")
     logger.info("📁 Processing %d HTML files", len(html_files))
+    if already_done:
+        logger.info("⏭️  Already processed (will skip): %d files", already_done)
     logger.info("=" * 70)
 
     for idx, html_file in enumerate(html_files, 1):
+        filename = Path(html_file).name
         try:
+            # Skip already processed files
+            if tracker.is_processed(filename):
+                dedup_skipped_count += 1
+                logger.debug("⏭️  [%d/%d] Skip (already processed): %s", idx, len(html_files), filename)
+                continue
+
             logger.info("")
-            logger.info("📄 [%d/%d] Processing: %s", idx, len(html_files), Path(html_file).name)
+            logger.info("📄 [%d/%d] Processing: %s", idx, len(html_files), filename)
 
             # Process file through orchestration pipeline
             sync_status = process_seafarer_sync(html_file, config)
@@ -117,6 +138,7 @@ def process_all_files(html_files, config, output_dir=None):
             # Update counters
             if sync_status.overall_status == BlockStatus.SUCCESS:
                 success_count += 1
+                tracker.mark_processed(filename, "success")
                 logger.info("✅ File processed successfully")
             elif sync_status.overall_status == BlockStatus.FAILED:
                 failed_count += 1
@@ -132,7 +154,7 @@ def process_all_files(html_files, config, output_dir=None):
 
         except Exception as e:
             failed_count += 1
-            logger.error("❌ Exception processing file %s: %s", Path(html_file).name, e)
+            logger.error("❌ Exception processing file %s: %s", filename, e)
             continue
 
     total_elapsed_sec = time.perf_counter() - total_start
@@ -179,7 +201,8 @@ def process_all_files(html_files, config, output_dir=None):
     logger.info("=" * 70)
     logger.info("✅ Successfully processed: %d files", success_count)
     logger.info("❌ Failed: %d files", failed_count)
-    logger.info("⏭️  Skipped: %d files", skipped_count)
+    logger.info("⏭️  Skipped (validation/deps): %d files", skipped_count)
+    logger.info("⏭️  Skipped (already done): %d files", dedup_skipped_count)
     logger.info("🏠 Uploaded addresses: %d", uploaded_addresses_count)
     logger.info("📄 Files with uploaded addresses: %d", files_with_uploaded_addresses)
     logger.info("📊 Total: %d files", len(html_files))

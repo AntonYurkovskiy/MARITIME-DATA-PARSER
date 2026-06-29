@@ -5,6 +5,8 @@ from src.cache.persistent_cache import (
     get_cache,
     cached_result,
     invalidate_cache,
+    ProcessedFilesTracker,
+    get_processed_tracker,
 )
 
 __all__ = [
@@ -12,4 +14,6 @@ __all__ = [
     "get_cache",
     "cached_result",
     "invalidate_cache",
+    "ProcessedFilesTracker",
+    "get_processed_tracker",
 ]
