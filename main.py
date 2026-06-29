@@ -1,3 +1,9 @@
+"""
+DEPRECATED: This legacy script is superseded by main_orchestration.py.
+
+It remains here for reference and debugging purposes only.
+Do not use for production runs — use main_orchestration.py instead.
+"""
 import logging
 from pathlib import Path
 

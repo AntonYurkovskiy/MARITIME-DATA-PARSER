@@ -8,6 +8,10 @@
 /out_of_rep/
 /baks/
 ./example.py
+cache.db
+clean_remote_base.py
+orchestration_results/
+pytest.ini
 
 __pycache__
 tz.md

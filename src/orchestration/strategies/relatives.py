@@ -301,7 +301,7 @@ def validate_relatives(relatives: List[Dict[str, Any]]) -> Tuple[bool, List[str]
     return True, []
 
 
-def build_relatives_payload(relatives: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def build_relatives_payload(relatives: List[Dict[str, Any]], context: Dict[str, Any] = None) -> List[Dict[str, Any]]:
     """Build API payloads for relatives block."""
     payloads: List[Dict[str, Any]] = []
 

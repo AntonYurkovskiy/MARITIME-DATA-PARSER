@@ -41,7 +41,7 @@ def normalize_photo(raw_photo: Dict[str, Any], context: Dict[str, Any] = None) -
     return photo
 
 
-def build_photo_payload(photo: Dict[str, Any]) -> Dict[str, Any]:
+def build_photo_payload(photo: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
     """Build photo payload for upload.
 
     The upload request should ultimately prepare a multipart payload with a file-like

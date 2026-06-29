@@ -210,7 +210,7 @@ def validate_main_info(normalized: Dict[str, Any]) -> Tuple[bool, List[str]]:
     return len(errors) == 0, errors
 
 
-def build_main_info_payload(normalized: Dict[str, Any]) -> Dict[str, Any]:
+def build_main_info_payload(normalized: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
     """Build API payload for main info block.
 
     Converts normalized fields into the exact shape expected by POST /seafarers/

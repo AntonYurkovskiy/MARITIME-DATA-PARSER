@@ -1,6 +1,5 @@
 import re
 import logging
-import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from rapidfuzz import fuzz, utils
@@ -12,12 +11,9 @@ from src.config import API_BASE_URL
 from src.extractors.dates import extract_date_to_iso
 from src.utils.mapping import get_value
 from src.utils.validators import _normalize, simple_cleaned_vessel_name
-from src.cache import get_cache
+from src.cache import get_cache, is_cache_enabled
 
 logger = logging.getLogger(__name__)
-
-# Allow disabling cache for tests
-_CACHE_DISABLED = os.getenv("DISABLE_CACHE", "false").lower() == "true"
 
 
 def _build_search_payload(vessel_name: str, source: str) -> Dict[str, Any]:
@@ -215,7 +211,7 @@ def get_vessel_uuid(
     vessel_name: str,
 ) -> Tuple[Optional[str], Optional[str], Optional[Dict[str, Any]]]:
     # Try persistent cache first (vessel lookups are expensive: up to 3 API calls)
-    if not _CACHE_DISABLED:
+    if is_cache_enabled():
         cache = get_cache()
         cache_key = f"vessel_uuid:{vessel_name.lower().strip()}"
         cached = cache.get(cache_key)
@@ -237,7 +233,7 @@ def get_vessel_uuid(
 
     if best_item and best_score >= 100 and best_source:
         result_uuid = best_item.get("uuid")
-        if not _CACHE_DISABLED:
+        if is_cache_enabled():
             cache = get_cache()
             cache_key = f"vessel_uuid:{vessel_name.lower().strip()}"
             cache.set(cache_key, {"uuid": result_uuid, "source": best_source, "item": best_item})
@@ -249,14 +245,14 @@ def get_vessel_uuid(
 
     if best_item and best_score >= 80 and best_source:
         result_uuid = best_item.get("uuid")
-        if not _CACHE_DISABLED:
+        if is_cache_enabled():
             cache = get_cache()
             cache_key = f"vessel_uuid:{vessel_name.lower().strip()}"
             cache.set(cache_key, {"uuid": result_uuid, "source": best_source, "item": best_item})
         return result_uuid, best_source, best_item
 
     # Cache negative result too (vessel not found)
-    if not _CACHE_DISABLED:
+    if is_cache_enabled():
         cache = get_cache()
         cache_key = f"vessel_uuid:{vessel_name.lower().strip()}"
         cache.set(cache_key, {"uuid": None, "source": None, "item": None})

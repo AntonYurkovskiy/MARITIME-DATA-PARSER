@@ -11,25 +11,10 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 def pytest_configure(config):
     """Disable persistent cache during tests to ensure mocks work correctly."""
     os.environ["DISABLE_CACHE"] = "true"
-    # Patch already-imported modules
+    # Patch the centralised flag so already-imported modules also see the change
     try:
-        import src.api.dicts as _dicts_mod
-        _dicts_mod._CACHE_DISABLED = True
-    except ImportError:
-        pass
-    try:
-        import src.api.geo as _geo_mod
-        _geo_mod._CACHE_DISABLED = True
-    except ImportError:
-        pass
-    try:
-        import src.api.seafarers as _sf_mod
-        _sf_mod._CACHE_DISABLED = True
-    except ImportError:
-        pass
-    try:
-        import src.api.vessels as _vessels_mod
-        _vessels_mod._CACHE_DISABLED = True
+        import src.cache.persistent_cache as _cache_mod
+        _cache_mod.CACHE_ENABLED = False
     except ImportError:
         pass
 

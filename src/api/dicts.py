@@ -1,13 +1,9 @@
 import logging
-import os
 from src.api.client import _get_session
 from src.config import API_BASE_URL
-from src.cache import get_cache, invalidate_cache
+from src.cache import get_cache, invalidate_cache, is_cache_enabled
 
 logger = logging.getLogger(__name__)
-
-# Allow disabling cache for tests
-_CACHE_DISABLED = os.getenv("DISABLE_CACHE", "false").lower() == "true"
 
 def clean_languages(languages_list: list[dict]) -> list[dict]:
     """Очищает пустые + удаляет через API"""
@@ -39,7 +35,7 @@ def clean_languages(languages_list: list[dict]) -> list[dict]:
 def _add_value_in_dict(value: str, dict_name: str) -> dict:
     """Добавляет значение в словарь 360Crew API"""
     # Check if already cached to avoid duplicate additions (unless cache disabled)
-    if not _CACHE_DISABLED:
+    if is_cache_enabled():
         cache = get_cache()
         cache_key = f"added:{dict_name}:{value.lower()}"
         cached_result = cache.get(cache_key)
@@ -55,8 +51,8 @@ def _add_value_in_dict(value: str, dict_name: str) -> dict:
     response.raise_for_status()
     result = response.json()
     
-    # Cache the result to avoid duplicate additions (unless cache disabled)
-    if not _CACHE_DISABLED:
+    # Cache the result to avoid duplicate additions
+    if is_cache_enabled():
         cache = get_cache()
         cache_key = f"added:{dict_name}:{value.lower()}"
         cache.set(cache_key, result)
@@ -67,7 +63,7 @@ def _add_value_in_dict(value: str, dict_name: str) -> dict:
 # ПОЛУЧЕНИЕ СЛОВАРЯ ПО КЛЮЧУ
 def get_dict(key):
     # Try to get from persistent cache first (unless cache disabled)
-    if not _CACHE_DISABLED:
+    if is_cache_enabled():
         cache = get_cache()
         cache_key = f"dict:{key}"
         cached_result = cache.get(cache_key)
@@ -86,8 +82,7 @@ def get_dict(key):
         response.raise_for_status()
         result = response.json()
         
-        # Cache the result (unless cache disabled)
-        if not _CACHE_DISABLED:
+        if is_cache_enabled():
             cache = get_cache()
             cache_key = f"dict:{key}"
             cache.set(cache_key, result)

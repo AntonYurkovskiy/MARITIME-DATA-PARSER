@@ -1,19 +1,15 @@
 import json
 from typing import Any, Dict, Tuple, Optional
 import requests
-import os
-
 import logging
+
 logger = logging.getLogger(__name__)
 
 from src.api.client import _get_session
 from src.api.dicts import _add_value_in_dict
 from src.config import API_BASE_URL, API_TIMEOUT
 from src.domain.builder import stringify_id_fields
-from src.cache import get_cache
-
-# Allow disabling cache for tests
-_CACHE_DISABLED = os.getenv("DISABLE_CACHE", "false").lower() == "true"
+from src.cache import get_cache, is_cache_enabled
 
 
 def add_seafarer(main:dict[str, Any])-> dict[str, Any]:
@@ -134,7 +130,7 @@ def upload_seafarer_photo(seafarer_uuid: str, photo: Dict[str, Any]) -> Dict[str
 def get_id(dictionary, value, dict_name: str):
     if value:
         # Try to get from cache first (unless cache disabled)
-        if not _CACHE_DISABLED:
+        if is_cache_enabled():
             cache = get_cache()
             cache_key = f"id:{dict_name}:{value.lower()}"
             cached_id = cache.get(cache_key)
@@ -151,7 +147,7 @@ def get_id(dictionary, value, dict_name: str):
         
         if found_id is not None:
             # Cache the found ID (unless cache disabled)
-            if not _CACHE_DISABLED:
+            if is_cache_enabled():
                 cache = get_cache()
                 cache_key = f"id:{dict_name}:{value.lower()}"
                 cache.set(cache_key, found_id)
@@ -160,7 +156,7 @@ def get_id(dictionary, value, dict_name: str):
         
         # Add new value and cache the result (unless cache disabled)
         new_id = _add_value_in_dict(value, dict_name)['inserted']['id']
-        if not _CACHE_DISABLED:
+        if is_cache_enabled():
             cache = get_cache()
             cache_key = f"id:{dict_name}:{value.lower()}"
             cache.set(cache_key, new_id)

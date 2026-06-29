@@ -1,18 +1,14 @@
 # ПОИСК В ГЕОГРАФИЧЕСКИХ СЛОВАРЯХ
 from typing import Any, Callable, Dict, List, Optional
 import logging
-import os
 
 from src.api.client import _get_session
 from src.config import API_BASE_URL
 from src.domain.languages import COUNTRY_TO_LANGUAGE
 from src.utils.validators import only_letters_regex
-from src.cache import get_cache
+from src.cache import get_cache, is_cache_enabled
 
 logger = logging.getLogger(__name__)
-
-# Allow disabling cache for tests
-_CACHE_DISABLED = os.getenv("DISABLE_CACHE", "false").lower() == "true"
 
 
 def search_geo(search_term: Optional[str], geo_type: str = "countries") -> Optional[List[Dict[str, Any]]]:
@@ -28,7 +24,7 @@ def search_geo(search_term: Optional[str], geo_type: str = "countries") -> Optio
         return None
 
     # Try to get from persistent cache first (unless cache disabled)
-    if not _CACHE_DISABLED:
+    if is_cache_enabled():
         cache = get_cache()
         cache_key = f"geo:{geo_type}:{search_term}"
         cached_result = cache.get(cache_key)
@@ -56,7 +52,7 @@ def search_geo(search_term: Optional[str], geo_type: str = "countries") -> Optio
         logger.info("✅ Найдено: %s записей", len(data))
         
         # Cache the result (unless cache disabled)
-        if not _CACHE_DISABLED:
+        if is_cache_enabled():
             cache = get_cache()
             cache_key = f"geo:{geo_type}:{search_term}"
             cache.set(cache_key, data)

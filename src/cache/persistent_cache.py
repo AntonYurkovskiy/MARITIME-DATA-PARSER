@@ -4,6 +4,7 @@ Persistent cache for API dictionaries and lookup results.
 Uses SQLite for thread-safe persistent storage with TTL support.
 """
 
+import os
 import sqlite3
 import json
 import time
@@ -17,6 +18,14 @@ logger = logging.getLogger(__name__)
 # Default TTL: 24 hours
 DEFAULT_TTL = 24 * 60 * 60  # seconds
 CACHE_DB_PATH = Path(__file__).parent.parent.parent / "cache.db"
+
+# Centralised cache-enabled flag — set DISABLE_CACHE=true to bypass all caching (e.g. in tests)
+CACHE_ENABLED: bool = os.getenv("DISABLE_CACHE", "false").lower() != "true"
+
+
+def is_cache_enabled() -> bool:
+    """Return False when caching is globally disabled (e.g. in tests via DISABLE_CACHE=true)."""
+    return CACHE_ENABLED
 
 
 class PersistentCache:

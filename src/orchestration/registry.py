@@ -67,12 +67,6 @@ def populate_default_registry() -> None:
         parse_addresses_raw,
         validate_addresses,
     )
-    from src.orchestration.strategies.certificates import (
-        build_certificates_payload,
-        normalize_certificates,
-        parse_certificates_raw,
-        validate_certificates,
-    )
     from src.orchestration.strategies.contracts import (
         build_contracts_payloads,
         normalize_sea_service,
@@ -113,10 +107,6 @@ def populate_default_registry() -> None:
         "normalize_addresses": normalize_addresses,
         "validate_addresses": validate_addresses,
         "build_addresses_payload": build_addresses_payload,
-        "parse_certificates_raw": parse_certificates_raw,
-        "normalize_certificates": normalize_certificates,
-        "validate_certificates": validate_certificates,
-        "build_certificates_payload": build_certificates_payload,
         "parse_relatives_raw": parse_relatives_raw,
         "normalize_relatives": normalize_relatives,
         "validate_relatives": validate_relatives,

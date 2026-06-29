@@ -393,7 +393,7 @@ def validate_documents(documents: List[Dict[str, Any]]) -> Tuple[bool, List[str]
     return True, []
 
 
-def build_documents_payload(documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def build_documents_payload(documents: List[Dict[str, Any]], context: Dict[str, Any] = None) -> List[Dict[str, Any]]:
     """Build API payload list for /seafarers/<seafarer_uuid>/certificates-like documents."""
     payloads: List[Dict[str, Any]] = []
 

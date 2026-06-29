@@ -145,6 +145,34 @@ def _send_payload(session: requests.Session, method: str, endpoint: str, payload
     return session.request(method=method.upper(), url=url, timeout=None, **request_kwargs)
 
 
+def _raise_for_status_with_body(response: requests.Response) -> None:
+    """Call raise_for_status and attach response body to the exception message."""
+    try:
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        body = (response.text[:2000] if response is not None and response.text else "")
+        raise requests.RequestException(f"{exc} | response_body={body}") from exc
+
+
+def _handle_block_error(
+    block_name: str,
+    block_spec: BlockSpec,
+    exc: Exception,
+    results: Dict[str, BlockResult],
+    overall_status_ref: list,
+) -> None:
+    """Record a failed block result and update overall status if block is required."""
+    result = BlockResult(
+        block_name=block_name,
+        status=BlockStatus.FAILED,
+        error=str(exc),
+    )
+    results[block_name] = result
+    if block_spec.get("required", False):
+        overall_status_ref[0] = BlockStatus.FAILED
+    log_block_results(result)
+
+
 def _adapt_payload_for_api(block_name: str, payload: Any, context: Dict[str, Any]) -> Any:
     """Apply API-compatibility tweaks for specific blocks before sending."""
     if block_name != "main_info" or not isinstance(payload, dict):
@@ -216,10 +244,7 @@ def _process_block(
             data={"parsed": parsed, "normalized": normalized},
         )
 
-    try:
-        payload = payload_builder(normalized, context)
-    except TypeError:
-        payload = payload_builder(normalized)
+    payload = payload_builder(normalized, context)
     payload = _adapt_payload_for_api(block_spec["name"], payload, context)
     endpoint = _format_endpoint(block_spec["endpoint"], context)
 
@@ -228,21 +253,13 @@ def _process_block(
         response_data_list = []
         for item in payload:
             response = _send_payload(session, block_spec["method"], endpoint, item)
-            try:
-                response.raise_for_status()
-            except requests.RequestException as exc:
-                body = response.text[:2000] if response is not None and response.text else ""
-                raise requests.RequestException(f"{exc} | response_body={body}") from exc
+            _raise_for_status_with_body(response)
             response_data_list.append(response.json() if response.content else None)
         response_data = response_data_list
         http_status = 207 if response_data_list else None
     else:
         response = _send_payload(session, block_spec["method"], endpoint, payload)
-        try:
-            response.raise_for_status()
-        except requests.RequestException as exc:
-            body = response.text[:2000] if response is not None and response.text else ""
-            raise requests.RequestException(f"{exc} | response_body={body}") from exc
+        _raise_for_status_with_body(response)
         response_data = response.json() if response.content else None
         http_status = response.status_code
 
@@ -284,7 +301,7 @@ def process_seafarer_sync(html_file: str, config: Dict[str, BlockSpec]) -> SyncS
     }
 
     results: Dict[str, BlockResult] = {}
-    overall_status = BlockStatus.SUCCESS
+    overall_status_ref = [BlockStatus.SUCCESS]
 
     for block_spec in _sorted_block_specs(config):
         block_name = block_spec["name"]
@@ -305,43 +322,15 @@ def process_seafarer_sync(html_file: str, config: Dict[str, BlockSpec]) -> SyncS
             if result.context_updates:
                 context.update(result.context_updates)
             if result.status in {BlockStatus.FAILED, BlockStatus.VALIDATION_ERROR} and block_spec.get("required", False):
-                overall_status = result.status
-            log_block_results(result)
-        except NotImplementedError as exc:
-            result = BlockResult(
-                block_name=block_name,
-                status=BlockStatus.FAILED,
-                error=str(exc),
-            )
-            results[block_name] = result
-            if block_spec.get("required", False):
-                overall_status = BlockStatus.FAILED
-            log_block_results(result)
-        except requests.RequestException as exc:
-            result = BlockResult(
-                block_name=block_name,
-                status=BlockStatus.FAILED,
-                error=str(exc),
-            )
-            results[block_name] = result
-            if block_spec.get("required", False):
-                overall_status = BlockStatus.FAILED
+                overall_status_ref[0] = result.status
             log_block_results(result)
         except Exception as exc:
-            result = BlockResult(
-                block_name=block_name,
-                status=BlockStatus.FAILED,
-                error=str(exc),
-            )
-            results[block_name] = result
-            if block_spec.get("required", False):
-                overall_status = BlockStatus.FAILED
-            log_block_results(result)
+            _handle_block_error(block_name, block_spec, exc, results, overall_status_ref)
 
     sync_status = SyncStatus(
         file_path=html_file,
         blocks=results,
-        overall_status=overall_status if results else BlockStatus.SKIPPED,
+        overall_status=overall_status_ref[0] if results else BlockStatus.SKIPPED,
         error_summary=None,
     )
     log_sync_summary(sync_status)

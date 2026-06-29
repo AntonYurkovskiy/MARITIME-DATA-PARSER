@@ -603,7 +603,7 @@ def validate_addresses(addresses: List[Dict[str, Any]]) -> Tuple[bool, List[str]
     return True, []
 
 
-def build_addresses_payload(addresses: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def build_addresses_payload(addresses: List[Dict[str, Any]], context: Dict[str, Any] = None) -> List[Dict[str, Any]]:
     """Build API payloads for addresses block.
 
     Expected payload shape per item:
