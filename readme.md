@@ -12,10 +12,10 @@
 ### 1. Клонировать и создать окружение
 
 ```bash
-git clone <repo-url>
-cd staff
+git clone https://github.com/AntonYurkovskiy/MARITIME-DATA-PARSER
+cd MARITIME-DATA-PARSER
 python -m venv venv
-venv\\Scripts\\activate        # Windows
+venv\\Scripts\\activate        
 pip install -r requirements.txt
 ```
 
@@ -31,11 +31,11 @@ copy .env.example .env
 CREWING_EMAIL=your_email@example.com
 CREWING_PASSWORD=your_password
 API_BASE_URL=https://staffdev.360crewing.com/api/v1
+INPUT_DIR=your_directory_with_html_files
 ```
 
-### 3. Положить HTML-файлы в `out/out_min/`
+### 3. Положить HTML-файлы в `INPUT_DIR`
 
-Или задать другую директорию через `INPUT_DIR` в `.env`.
 
 ### 4. Запустить
 
@@ -67,14 +67,6 @@ python main_orchestration.py
 # Сбросить дедупликацию и обработать все файлы заново
 $env:REPROCESS_ALL="true"; python main_orchestration.py
 
-# Очистить загруженные записи с сервера (из последнего отчёта)
-python clean_remote_base.py --force
-
-# Очистить все записи с сервера (загрузить список с сервера)
-python clean_remote_base.py --from-server-list --force
-
-# Dry-run — показать что будет удалено, без удаления
-python clean_remote_base.py --dry-run
 ```
 
 ---
@@ -83,9 +75,7 @@ python clean_remote_base.py --dry-run
 
 ```
 staff/
-├── main_orchestration.py       # Основная точка запуска
-├── main.py                     # [DEPRECATED] legacy-скрипт, только для справки
-├── clean_remote_base.py        # Утилита очистки записей на сервере
+├── main_orchestration.py       # Основная точка запуска                     
 ├── requirements.txt            # Прод-зависимости
 ├── requirements-dev.txt        # Dev-зависимости (pytest, ruff, mypy)
 ├── .env.example                # Шаблон переменных окружения
