@@ -27,7 +27,7 @@ def validate_photo(photo: Dict[str, Any]) -> Tuple[bool, List[str]]:
     return True, []
 
 
-def normalize_photo(raw_photo: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_photo(raw_photo: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
     """Normalize raw photo data before upload."""
     if not raw_photo:
         return {}

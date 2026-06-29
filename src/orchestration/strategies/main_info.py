@@ -49,7 +49,7 @@ def parse_main_info_raw(raw_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def normalize_main_info(parsed: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_main_info(parsed: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
     """Normalize main info fields for payload building.
     
     Expects parsed dict with 'main_info' and 'biometrics' keys.
@@ -64,6 +64,9 @@ def normalize_main_info(parsed: Dict[str, Any]) -> Dict[str, Any]:
     raw_main_info = parsed.get("main_info", {})
     biometrics = parsed.get("biometrics", {})
     refs = _load_reference_dicts()
+    
+    # Get intra-file cache from context
+    file_cache = context.get("_file_cache", {}) if context else {}
     normalized: Dict[str, Any] = {}
 
     try:
@@ -129,8 +132,11 @@ def normalize_main_info(parsed: Dict[str, Any]) -> Dict[str, Any]:
         # Extract nationality
         citizenship_str = raw_main_info.get("Citizenship:", "")
         if citizenship_str:
-            nationality_country = search_geo(citizenship_str, "countries")
-            normalized["nationality_country_id"] = nationality_country[0]["id"] if nationality_country else None
+            cache_key = f"nationality:{citizenship_str}"
+            if cache_key not in file_cache:
+                nationality_country = search_geo(citizenship_str, "countries")
+                file_cache[cache_key] = nationality_country[0]["id"] if nationality_country else None
+            normalized["nationality_country_id"] = file_cache[cache_key]
         else:
             normalized["nationality_country_id"] = None
     except Exception as e:
@@ -151,9 +157,12 @@ def normalize_main_info(parsed: Dict[str, Any]) -> Dict[str, Any]:
         residence_str = raw_main_info.get("Country of residence / City:", "")
         citizenship_str = raw_main_info.get("Citizenship:", "")
         if residence_str:
-            resident_country = get_resident_country(residence_str, citizenship_str)
-            geo_resident = search_geo(resident_country, "countries")
-            normalized["resident_country_id"] = geo_resident[0]["id"] if geo_resident else None
+            cache_key = f"resident:{residence_str}:{citizenship_str}"
+            if cache_key not in file_cache:
+                resident_country = get_resident_country(residence_str, citizenship_str)
+                geo_resident = search_geo(resident_country, "countries")
+                file_cache[cache_key] = geo_resident[0]["id"] if geo_resident else None
+            normalized["resident_country_id"] = file_cache[cache_key]
         else:
             normalized["resident_country_id"] = None
     except Exception as e:

@@ -79,7 +79,7 @@ def parse_sea_service_raw(raw_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     return entries if isinstance(entries, list) else []
 
 
-def normalize_sea_service(raw_contracts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def normalize_sea_service(raw_contracts: List[Dict[str, Any]], context: Dict[str, Any] = None) -> List[Dict[str, Any]]:
     """Normalize raw contract rows.
 
     For each entry resolves:
@@ -91,16 +91,23 @@ def normalize_sea_service(raw_contracts: List[Dict[str, Any]]) -> List[Dict[str,
         return []
 
     ranks = _get_ranks_dict()
+    file_cache = context.get("_file_cache", {}) if context else {}
     normalized = []
 
     for row in raw_contracts:
         entry: Dict[str, Any] = {}
 
-        # Rank
+        # Rank (intra-file cache)
         try:
             rank_str = row.get("Position", "")
             entry["rank"] = rank_str
-            entry["rank_id"] = get_id(ranks, rank_str, "ranks") if rank_str else None
+            if rank_str:
+                rank_key = f"rank_id:{rank_str}"
+                if rank_key not in file_cache:
+                    file_cache[rank_key] = get_id(ranks, rank_str, "ranks")
+                entry["rank_id"] = file_cache[rank_key]
+            else:
+                entry["rank_id"] = None
         except Exception as e:
             logger.warning("Failed to resolve rank '%s': %s", row.get("Position"), e)
             entry["rank"] = row.get("Position", "")
@@ -191,7 +198,7 @@ def validate_contracts(contracts: List[Dict[str, Any]]) -> Tuple[bool, List[str]
     return True, []
 
 
-def build_contracts_payloads(contracts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def build_contracts_payloads(contracts: List[Dict[str, Any]], context: Dict[str, Any] = None) -> List[Dict[str, Any]]:
     """Build API payloads for contracts block.
 
     Returns list of individual contract dicts for POST /contracts.
@@ -199,6 +206,7 @@ def build_contracts_payloads(contracts: List[Dict[str, Any]]) -> List[Dict[str, 
     Vessel UUID is resolved via API lookup; falls back to raw name if not found.
     """
     payloads = []
+    file_cache = context.get("_file_cache", {}) if context else {}
 
     vessel_types = _get_vessel_types_dict()
 
@@ -221,14 +229,19 @@ def build_contracts_payloads(contracts: List[Dict[str, Any]]) -> List[Dict[str, 
         try:
             cleaned_name = simple_cleaned_vessel_name(contract["vessel_name"])
             raw_name = contract.get("vessel_name_raw") or contract.get("vessel_name") or ""
-            if cleaned_name:
-                vessel_uuid, found_source, _ = get_vessel_uuid(cleaned_name)
-                if vessel_uuid and found_source == "historical":
-                    source = found_source
-                else:
-                    vessel_uuid = None
-            if not vessel_uuid:
-                vessel_uuid, source = resolve_historical_vessel(cleaned_name, raw_name, vessel_types)
+            vessel_cache_key = f"vessel_payload:{cleaned_name}"
+            if vessel_cache_key in file_cache:
+                vessel_uuid, source = file_cache[vessel_cache_key]
+            else:
+                if cleaned_name:
+                    vessel_uuid, found_source, _ = get_vessel_uuid(cleaned_name)
+                    if vessel_uuid and found_source == "historical":
+                        source = found_source
+                    else:
+                        vessel_uuid = None
+                if not vessel_uuid:
+                    vessel_uuid, source = resolve_historical_vessel(cleaned_name, raw_name, vessel_types)
+                file_cache[vessel_cache_key] = (vessel_uuid, source)
         except Exception as e:
             logger.warning("Vessel UUID lookup failed for '%s': %s", contract.get("vessel_name"), e)
             # Keep payload generation resilient for partially normalized/manual test inputs.

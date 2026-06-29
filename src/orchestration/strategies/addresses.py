@@ -488,10 +488,13 @@ def parse_addresses_raw(raw_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     ]
 
 
-def normalize_addresses(raw_addresses: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def normalize_addresses(raw_addresses: List[Dict[str, Any]], context: Dict[str, Any] = None) -> List[Dict[str, Any]]:
     """Normalize raw address rows into API-ready structure."""
     normalized: List[Dict[str, Any]] = []
     refs = _load_reference_dicts()
+
+    # Get intra-file cache from context
+    file_cache = context.get("_file_cache", {}) if context else {}
 
     for raw in raw_addresses or []:
         raw_home_address = (raw.get("home_address") or "").strip()
@@ -509,7 +512,15 @@ def normalize_addresses(raw_addresses: List[Dict[str, Any]]) -> List[Dict[str, A
         if not city_name and residence and _norm_ascii(residence) != _norm_ascii(country_name):
             city_name = residence
 
-        country_id = _first_geo_id(country_name, "countries") if country_name else None
+        # Cache country_id per file
+        country_cache_key = f"addr_country:{country_name}"
+        if country_name:
+            if country_cache_key not in file_cache:
+                file_cache[country_cache_key] = _first_geo_id(country_name, "countries")
+            country_id = file_cache[country_cache_key]
+        else:
+            country_id = None
+
         city_obj = _select_best_city(city_name, country_name) if city_name else None
 
         # Fallback: try city from line1 like "Latvia, Jurmala, ...".

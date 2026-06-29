@@ -310,9 +310,12 @@ def parse_documents_raw(raw_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     return result
 
 
-def normalize_documents(raw_documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def normalize_documents(raw_documents: List[Dict[str, Any]], context: Dict[str, Any] = None) -> List[Dict[str, Any]]:
     """Normalize certificate rows into API-ready document entries."""
     refs = _load_reference_dicts()
+    
+    # Get intra-file cache from context
+    file_cache = context.get("_file_cache", {}) if context else {}
     normalized: List[Dict[str, Any]] = []
 
     for row in raw_documents or []:
@@ -324,10 +327,28 @@ def normalize_documents(raw_documents: List[Dict[str, Any]]) -> List[Dict[str, A
 
         issued_date = _extract_iso_date(row.get("Date of issue"))
         expires_date = _extract_iso_date(row.get("Valid up"))
-        issued_country_id = _resolve_country_id(row.get("Country of issue"))
+        
+        # Cache country_id lookup
+        country_of_issue = row.get("Country of issue")
+        if country_of_issue:
+            cache_key = f"country_issue:{country_of_issue}"
+            if cache_key not in file_cache:
+                issued_country_id = _resolve_country_id(country_of_issue)
+                file_cache[cache_key] = issued_country_id
+            else:
+                issued_country_id = file_cache[cache_key]
+        else:
+            issued_country_id = None
 
-        type_id = _resolve_type_id(row, refs)
-        group_id = _resolve_certificate_group_id(title, refs, source_section)
+        type_cache_key = f"type_id:{title}:{source_section}"
+        if type_cache_key not in file_cache:
+            file_cache[type_cache_key] = _resolve_type_id(row, refs)
+        type_id = file_cache[type_cache_key]
+
+        group_cache_key = f"group_id:{title}:{source_section}"
+        if group_cache_key not in file_cache:
+            file_cache[group_cache_key] = _resolve_certificate_group_id(title, refs, source_section)
+        group_id = file_cache[group_cache_key]
 
         normalized.append(
             {

@@ -179,9 +179,12 @@ def _normalize_addresses_for_relative(raw_address: Optional[str], main_context: 
     return build_addresses_payload(normalized_addresses) if is_valid else []
 
 
-def normalize_relatives(parsed: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def normalize_relatives(parsed: List[Dict[str, Any]], context: Dict[str, Any] = None) -> List[Dict[str, Any]]:
     """Normalize relative data for payload building."""
     refs = _load_reference_dicts()
+    
+    # Get intra-file cache from context
+    file_cache = context.get("_file_cache", {}) if context else {}
     normalized: List[Dict[str, Any]] = []
 
     for raw in parsed or []:
@@ -221,12 +224,18 @@ def normalize_relatives(parsed: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         resident_country_id = None
         nationality_country_id = None
         if raw.get("residence"):
-            resident_country = get_resident_country(raw.get("residence"), raw.get("citizenship"))
-            geo_resident = search_geo(resident_country, "countries") if resident_country else []
-            resident_country_id = geo_resident[0]["id"] if geo_resident else None
+            cache_key = f"resident_relative:{raw.get('residence')}:{raw.get('citizenship')}"
+            if cache_key not in file_cache:
+                resident_country = get_resident_country(raw.get("residence"), raw.get("citizenship"))
+                geo_resident = search_geo(resident_country, "countries") if resident_country else []
+                file_cache[cache_key] = geo_resident[0]["id"] if geo_resident else None
+            resident_country_id = file_cache[cache_key]
         if raw.get("citizenship"):
-            geo_nationality = search_geo(raw.get("citizenship"), "countries") or []
-            nationality_country_id = geo_nationality[0]["id"] if geo_nationality else None
+            cache_key = f"nationality_relative:{raw.get('citizenship')}"
+            if cache_key not in file_cache:
+                geo_nationality = search_geo(raw.get("citizenship"), "countries") or []
+                file_cache[cache_key] = geo_nationality[0]["id"] if geo_nationality else None
+            nationality_country_id = file_cache[cache_key]
 
         phone_numbers = _normalize_phone_numbers(raw.get("phone_raw"), resident_country_id, nationality_country_id)
         emails = get_emails_list(raw.get("email_raw")) if raw.get("email_raw") else []
