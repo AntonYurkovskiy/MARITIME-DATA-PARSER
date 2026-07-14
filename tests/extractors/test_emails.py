@@ -87,7 +87,7 @@ class TestGetEmailsList:
         assert len(result) == 1
         assert result[0] == {
             "email": "test@example.com",
-            "comment": "comment",
+            "comment": None,
             "uuid": None
         }
     
@@ -98,7 +98,7 @@ class TestGetEmailsList:
         assert len(result) == 2
         assert result[0]["email"] == "a@b.com"
         assert result[1]["email"] == "c@d.org"
-        assert all(item["comment"] == "comment" for item in result)
+        assert all(item["comment"] is None for item in result)
         assert all(item["uuid"] is None for item in result)
     
     def test_returns_none_when_no_emails(self):

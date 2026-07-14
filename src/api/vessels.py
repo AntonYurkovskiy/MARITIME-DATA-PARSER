@@ -46,8 +46,11 @@ def _build_search_payload(vessel_name: str, source: str) -> Dict[str, Any]:
 def _send_search_request(search_url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     session = _get_session()
     response = session.post(search_url, json=payload)
-    response.raise_for_status()
-    return response.json()
+    try:
+        response.raise_for_status()
+        return response.json()
+    finally:
+        response.close()
 
 
 def _get_search_url(route: str) -> str:
@@ -128,7 +131,7 @@ def _best_fuzzy_item(
             processor=utils.default_process,
             score_cutoff=0,
         )
-        
+
         score = int(score)
 
         if score > best_score:
@@ -354,16 +357,19 @@ def post_historical_contract(url: str, payload: Dict[str, Any]) -> Dict[str, Any
     logger.debug("Posting historical contract: %s", payload)
 
     response = session.post(url, json=payload)
-    if response.status_code >= 400:
-        logger.error(
-            "Historical contract failed (%s): status=%s text=%s payload=%s",
-            url,
-            response.status_code,
-            response.text,
-            payload,
-        )
-    response.raise_for_status()
-    return response.json()
+    try:
+        if response.status_code >= 400:
+            logger.error(
+                "Historical contract failed (%s): status=%s text=%s payload=%s",
+                url,
+                response.status_code,
+                response.text,
+                payload,
+            )
+        response.raise_for_status()
+        return response.json()
+    finally:
+        response.close()
 
 
 def _validate_new_vessel_input(contract_details: Dict[str, Any]) -> Tuple[str, str]:
@@ -429,10 +435,13 @@ def _create_historical_vessel(payload: Dict[str, Any]) -> Dict[str, Any]:
     session = _get_session()
     url = f"{API_BASE_URL}/vessels/historical"
     response = session.post(url, json=payload)
-    logger.debug("Response status: %s", response.status_code)
-    logger.debug("Response text: %s", response.text)
-    response.raise_for_status()
-    return response.json()
+    try:
+        logger.debug("Response status: %s", response.status_code)
+        logger.debug("Response text: %s", response.text)
+        response.raise_for_status()
+        return response.json()
+    finally:
+        response.close()
 
 
 def _add_new_vessel(
@@ -512,9 +521,12 @@ def search_external_vessel(name_or_imo: Optional[str]) -> Optional[List[Dict[str
     }
 
     response = session.post(url, json=payload)
-    response.raise_for_status()
-    data = response.json()
-    items = data.get("items", []) or []
-    if isinstance(items, list):
-        return items
-    return []
+    try:
+        response.raise_for_status()
+        data = response.json()
+        items = data.get("items", []) or []
+        if isinstance(items, list):
+            return items
+        return []
+    finally:
+        response.close()

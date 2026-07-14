@@ -145,6 +145,24 @@ def _send_payload(session: requests.Session, method: str, endpoint: str, payload
     return session.request(method=method.upper(), url=url, timeout=None, **request_kwargs)
 
 
+def _close_payload_files(payload: Any) -> None:
+    """Close file-like objects embedded in multipart payloads."""
+    if not isinstance(payload, dict):
+        return
+
+    for file_item in payload.get("files") or []:
+        if not isinstance(file_item, (tuple, list)) or len(file_item) < 2:
+            continue
+        file_value = file_item[1]
+        file_obj = None
+        if isinstance(file_value, (tuple, list)) and len(file_value) >= 2:
+            file_obj = file_value[1]
+        elif hasattr(file_value, "close"):
+            file_obj = file_value
+        if hasattr(file_obj, "close"):
+            file_obj.close()
+
+
 def _raise_for_status_with_body(response: requests.Response) -> None:
     """Call raise_for_status and attach response body to the exception message."""
     try:
@@ -152,6 +170,11 @@ def _raise_for_status_with_body(response: requests.Response) -> None:
     except requests.RequestException as exc:
         body = (response.text[:2000] if response is not None and response.text else "")
         raise requests.RequestException(f"{exc} | response_body={body}") from exc
+
+
+def _read_response_data(response: requests.Response) -> Any:
+    _raise_for_status_with_body(response)
+    return response.json() if response.content else None
 
 
 def _handle_block_error(
@@ -252,16 +275,26 @@ def _process_block(
     if isinstance(payload, list):
         response_data_list = []
         for item in payload:
-            response = _send_payload(session, block_spec["method"], endpoint, item)
-            _raise_for_status_with_body(response)
-            response_data_list.append(response.json() if response.content else None)
+            response = None
+            try:
+                response = _send_payload(session, block_spec["method"], endpoint, item)
+                response_data_list.append(_read_response_data(response))
+            finally:
+                if response is not None:
+                    response.close()
+                _close_payload_files(item)
         response_data = response_data_list
         http_status = 207 if response_data_list else None
     else:
-        response = _send_payload(session, block_spec["method"], endpoint, payload)
-        _raise_for_status_with_body(response)
-        response_data = response.json() if response.content else None
-        http_status = response.status_code
+        response = None
+        try:
+            response = _send_payload(session, block_spec["method"], endpoint, payload)
+            response_data = _read_response_data(response)
+            http_status = response.status_code
+        finally:
+            if response is not None:
+                response.close()
+            _close_payload_files(payload)
 
     context_updates: Dict[str, Any] = {}
     if isinstance(response_data, dict):

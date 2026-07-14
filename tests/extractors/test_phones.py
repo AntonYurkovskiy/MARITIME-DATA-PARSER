@@ -102,7 +102,7 @@ class TestGetPhones:
         
         assert len(result) == 2
         assert all(item["type_id"] == 1 for item in result)
-        assert all(item["comment"] == "comment" for item in result)
+        assert all(item["comment"] is None for item in result)
         assert all(item["uuid"] is None for item in result)
     
     def test_invalid_phones_skipped(self, phone_utils, mock_resolve_country_func, mock_search_geo):
@@ -113,6 +113,23 @@ class TestGetPhones:
         
         # Только два валидных номера (invalid пропускается)
         assert len(result) == 2
+
+    def test_russian_trunk_phone_with_internal_spaces_and_duplicate(self, phone_utils, mock_search_geo):
+        phones_str = "8-914-070 8881 8-914-070 8881"
+        mock_func = MagicMock()
+        mock_func.return_value = {
+            "country_id": 7,
+            "country_name": "Russia",
+            "country_code": "RU",
+        }
+
+        with patch(PHONE_UTILS_MODULE + ".resolve_country_by_code", mock_func):
+            result = phone_utils.get_phones(phones_str, 7, 7, mock_search_geo)
+
+        assert len(result) == 1
+        assert result[0]["country_id"] == 7
+        assert result[0]["number"] == "9140708881"
+        assert result[0]["comment"] is None
     
     def test_empty_phones_string(self, phone_utils, mock_search_geo):
         result = phone_utils.get_phones("", 1, 1, mock_search_geo)

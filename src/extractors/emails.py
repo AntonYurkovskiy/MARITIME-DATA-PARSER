@@ -10,7 +10,7 @@ def find_emails(text) -> list[Any]:
 
 def get_emails_list(email_string):
     """Из строки с емейлами делает словарь по форме 
-    {"email":"email", "comment":"comment", "uuid":"uuid"}
+    {"email":"email", "comment":None, "uuid":"uuid"}
 
     Args:
         email_string (str): строка в которую должен входить email
@@ -21,7 +21,7 @@ def get_emails_list(email_string):
     emails_list = []
     if find_emails(email_string):
         for email in find_emails(email_string):
-            emails_list.append({"email":email, "comment":"comment", "uuid":None})
+            emails_list.append({"email": email, "comment": None, "uuid": None})
     else:
         return None
     # исправить чтобы не сохранял дублирующие емейлы, а сохранял только уникальные

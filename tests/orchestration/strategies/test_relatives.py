@@ -48,7 +48,7 @@ def test_normalize_relatives_builds_nested_addresses(monkeypatch):
     )
     monkeypatch.setattr(relatives, "get_resident_country", lambda residence, citizenship: "Ukraine")
     monkeypatch.setattr(relatives, "search_geo", lambda term, geo_type: [{"id": 99}] if geo_type == "countries" and term == "Ukraine" else [])
-    monkeypatch.setattr(relatives, "get_phones", lambda *args, **kwargs: [{"uuid": None, "country_id": 380, "number": "671234567", "type_id": 1, "comment": "comment"}])
+    monkeypatch.setattr(relatives, "get_phones", lambda *args, **kwargs: [{"uuid": None, "country_id": 380, "number": "671234567", "type_id": 1, "comment": None}])
     monkeypatch.setattr(relatives, "country_to_language", lambda citizenship: "Ukrainian")
     monkeypatch.setattr(relatives, "get_dict", lambda key: [])
 
@@ -79,7 +79,7 @@ def test_normalize_relatives_builds_nested_addresses(monkeypatch):
     assert item["relationship_type_id"] == 5
     assert item["language_id"] == 10
     assert item["phone_numbers"]
-    assert item["emails"] == [{"email": "wife@example.com", "comment": "comment", "uuid": None}]
+    assert item["emails"] == [{"email": "wife@example.com", "comment": None, "uuid": None}]
     assert item["addresses"]
     assert item["addresses"][0]["line1"] == "Ukraine, Odesa, Shevchenko ave 10"
 
@@ -110,8 +110,8 @@ def test_build_relatives_payload_preserves_nested_lists():
                 "gender_id": 2,
                 "relationship_type_id": 5,
                 "language_id": 10,
-                "phone_numbers": [{"uuid": None, "country_id": 380, "number": "671234567", "type_id": 1, "comment": "comment"}],
-                "emails": [{"email": "wife@example.com", "comment": "comment", "uuid": None}],
+                "phone_numbers": [{"uuid": None, "country_id": 380, "number": "671234567", "type_id": 1, "comment": None}],
+                "emails": [{"email": "wife@example.com", "comment": None, "uuid": None}],
                 "addresses": [{"type_id": 1, "line1": "Ukraine, Odesa, Shevchenko ave 10"}],
             }
         ]

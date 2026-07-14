@@ -50,7 +50,7 @@ def create_session_with_retries():
     class RetryWithStats(Retry):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-        
+
         def increment(self, *args, **kwargs):
             _retry_stats["total_attempts"] += 1
             _retry_stats["total_retries"] += 1
@@ -58,10 +58,10 @@ def create_session_with_retries():
 
     retry_strategy = RetryWithStats(
         total=10,
-        backoff_factor=1,  
+        backoff_factor=1,
         status_forcelist=[429, 502, 503, 504],
     )
-    adapter = HTTPAdapter(max_retries=retry_strategy)
+    adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=2, pool_maxsize=2, pool_block=True)
     session.mount("http://", adapter)
     session.mount("https://", adapter)
     return session
@@ -112,7 +112,11 @@ def login_and_set_auth_headers(session):
             headers=headers,
             timeout=API_TIMEOUT,
         )
-        login_response.raise_for_status()
+        try:
+            login_response.raise_for_status()
+            token = login_response.json().get("access_token")
+        finally:
+            login_response.close()
     except requests.exceptions.Timeout:
         logger.error("⏰ TIMEOUT: API не отвечает! Проверьте: интернет, VPN, firewall")
         raise
@@ -123,7 +127,6 @@ def login_and_set_auth_headers(session):
         logger.error("❌ Login failed: %s", e)
         raise
 
-    token = login_response.json().get("access_token")
     assert_token_present(token)
 
     session.headers.update({
@@ -137,6 +140,6 @@ def assert_token_present(token):
     """Проверяет наличие токена, выбрасывает ValueError при отсутствии."""
     if not token:
         raise ValueError("Нет access_token в ответе!")
-    
-    
-    
+
+
+

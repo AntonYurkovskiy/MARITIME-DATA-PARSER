@@ -45,24 +45,26 @@ def search_geo(search_term: Optional[str], geo_type: str = "countries") -> Optio
     payload = {"term": search_term}
     logger.debug("🔍 GET %s", url)
     response = session.get(url, json=payload)
+    try:
+        logger.debug("Status: %s", response.status_code)
+        if response.status_code == 200:
+            data = response.json()
+            logger.info("✅ Найдено: %s записей", len(data))
+            
+            # Cache the result (unless cache disabled)
+            if is_cache_enabled():
+                cache = get_cache()
+                cache_key = f"geo:{geo_type}:{search_term}"
+                cache.set(cache_key, data)
+                logger.debug(f"💾 Cached geo search: {search_term} ({geo_type})")
+            
+            return data
 
-    logger.debug("Status: %s", response.status_code)
-    if response.status_code == 200:
-        data = response.json()
-        logger.info("✅ Найдено: %s записей", len(data))
-        
-        # Cache the result (unless cache disabled)
-        if is_cache_enabled():
-            cache = get_cache()
-            cache_key = f"geo:{geo_type}:{search_term}"
-            cache.set(cache_key, data)
-            logger.debug(f"💾 Cached geo search: {search_term} ({geo_type})")
-        
-        return data
-
-    # HTTP-ошибка → [] (по тесту test_search_geo_http_error)
-    logger.warning("❌ Ошибка поиска: %s", response.text)
-    return []
+        # HTTP-ошибка → [] (по тесту test_search_geo_http_error)
+        logger.warning("❌ Ошибка поиска: %s", response.text)
+        return []
+    finally:
+        response.close()
 
 
 def search_geo_exact(search_term: str, geo_type: str = "cities") -> List[Dict[str, Any]]:
@@ -98,15 +100,17 @@ def search_geo_dict(geo_type: str = "countries") -> Optional[List[Dict[str, Any]
         url = f"{base_url}/{geo_type}/search/"
 
     response = session.get(url)
-
-    logger.debug("Status: %s", response.status_code)
-    if response.status_code == 200:
-        data = response.json()
-        logger.debug("✅ Найдено: %s записей", len(data))
-        return data
-    else:
-        logger.warning("❌ Ошибка поиска: %s", response.text)
-        return None
+    try:
+        logger.debug("Status: %s", response.status_code)
+        if response.status_code == 200:
+            data = response.json()
+            logger.debug("✅ Найдено: %s записей", len(data))
+            return data
+        else:
+            logger.warning("❌ Ошибка поиска: %s", response.text)
+            return None
+    finally:
+        response.close()
 
 
 def get_resident_country(search_term: str, citizenship: str) -> Optional[str]:

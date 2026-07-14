@@ -20,7 +20,8 @@ def clean_languages(languages_list: list[dict]) -> list[dict]:
     for empty_id in empty_ids:
         delete_url = f'{API_BASE_URL}/admin/dicts/languages/{empty_id}'
         try:
-            session.delete(delete_url)
+            response = session.delete(delete_url)
+            response.close()
             logger.info("🗑️ Удалён ID: %s", empty_id)
         except Exception as e:
             logger.warning("Не удалось удалить ID %s: %s", empty_id, e)
@@ -48,8 +49,11 @@ def _add_value_in_dict(value: str, dict_name: str) -> dict:
     url = f'{API_BASE_URL}/admin/dicts/{dict_name}'
 
     response = session.post(url, json={"value": value})
-    response.raise_for_status()
-    result = response.json()
+    try:
+        response.raise_for_status()
+        result = response.json()
+    finally:
+        response.close()
     
     # Cache the result to avoid duplicate additions
     if is_cache_enabled():
@@ -79,8 +83,11 @@ def get_dict(key):
 
     try:
         response = session.get(url, timeout=(10, 30))
-        response.raise_for_status()
-        result = response.json()
+        try:
+            response.raise_for_status()
+            result = response.json()
+        finally:
+            response.close()
         
         if is_cache_enabled():
             cache = get_cache()
@@ -102,6 +109,9 @@ def get_dicts_list(is_static=False):
     url = f'{API_BASE_URL}/admin/dicts?is_static={is_static}'
 
     response = session.get(url)
-    response.raise_for_status()
-    data = response.json()
+    try:
+        response.raise_for_status()
+        data = response.json()
+    finally:
+        response.close()
     return data

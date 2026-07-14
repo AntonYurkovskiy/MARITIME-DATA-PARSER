@@ -19,6 +19,8 @@ from src.extractors.names import get_names
 from src.extractors.phones import get_phones
 from src.parsers.photo import get_photo
 
+from src.config import OFFICE_UUID
+
 logger = logging.getLogger(__name__)
 
 # Cache for reference dicts (loaded once)
@@ -40,7 +42,7 @@ def _load_reference_dicts() -> Dict[str, Any]:
 
 def parse_main_info_raw(raw_data: Dict[str, Any]) -> Dict[str, Any]:
     """Extract main info and related data from parsed HTML.
-    
+
     Returns dict with 'main_info', 'biometrics' keys for use in normalize step.
     """
     return {
@@ -51,9 +53,9 @@ def parse_main_info_raw(raw_data: Dict[str, Any]) -> Dict[str, Any]:
 
 def normalize_main_info(parsed: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
     """Normalize main info fields for payload building.
-    
+
     Expects parsed dict with 'main_info' and 'biometrics' keys.
-    
+
     Handles extraction of:
     - Names (name, middle_name, surname)
     - Dates (date_of_birth, place_of_birth)
@@ -64,7 +66,7 @@ def normalize_main_info(parsed: Dict[str, Any], context: Dict[str, Any] = None) 
     raw_main_info = parsed.get("main_info", {})
     biometrics = parsed.get("biometrics", {})
     refs = _load_reference_dicts()
-    
+
     # Get intra-file cache from context
     file_cache = context.get("_file_cache", {}) if context else {}
     normalized: Dict[str, Any] = {}
@@ -190,11 +192,11 @@ def normalize_main_info(parsed: Dict[str, Any], context: Dict[str, Any] = None) 
 
 def validate_main_info(normalized: Dict[str, Any]) -> Tuple[bool, List[str]]:
     """Validate normalized main info data.
-    
+
     Requires at least: name, surname, rank_id, gender_id, date_of_birth.
     """
     errors = []
-    
+
     # TODO:DRY it with list or tuple of required fields
     if not normalized.get("name"):
         errors.append("name is required")
@@ -226,12 +228,13 @@ def build_main_info_payload(normalized: Dict[str, Any], context: Dict[str, Any] 
         "gender_id": normalized.get("gender_id"),
         "marital_status_id": normalized.get("marital_status_id"),
         "nationality_country_id": normalized.get("nationality_country_id"),
-        "emails": [{"email": email, "comment": "", "uuid": None} for email in normalized.get("emails", [])],
+        "emails": [{"email": email, "comment": None, "uuid": None} for email in normalized.get("emails", [])],
         "resident_status_id": normalized.get("resident_country_id"),
         "fast_note": normalized.get("fast_note"),
         "phone_numbers": normalized.get("phone_numbers", []),
         "personal_id": normalized.get("personal_id"),
         "language_id": normalized.get("language_id"),
+        "office_uuid": OFFICE_UUID,
     }
 
     if normalized.get("photo"):

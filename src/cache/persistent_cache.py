@@ -9,6 +9,8 @@ import sqlite3
 import json
 import time
 import logging
+import atexit
+from threading import RLock
 from pathlib import Path
 from typing import Any, Optional
 from functools import wraps
@@ -34,13 +36,29 @@ class PersistentCache:
     def __init__(self, db_path: Optional[Path] = None, ttl: int = DEFAULT_TTL):
         self.db_path = db_path or CACHE_DB_PATH
         self.ttl = ttl
+        self._lock = RLock()
+        self._conn: Optional[sqlite3.Connection] = None
         self._init_db()
+
+    def _connect(self) -> sqlite3.Connection:
+        """Return a process-local SQLite connection instead of reopening per operation."""
+        if self._conn is None:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._conn = sqlite3.connect(str(self.db_path), timeout=30)
+            self._conn.execute("PRAGMA busy_timeout = 30000")
+        return self._conn
+
+    def close(self) -> None:
+        """Close the persistent SQLite connection."""
+        with self._lock:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
     
     def _init_db(self):
         """Initialize SQLite database with cache table."""
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        with sqlite3.connect(str(self.db_path)) as conn:
+        with self._lock:
+            conn = self._connect()
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS cache (
                     key TEXT PRIMARY KEY,
@@ -53,7 +71,8 @@ class PersistentCache:
     def get(self, key: str) -> Optional[Any]:
         """Get value from cache if exists and not expired."""
         try:
-            with sqlite3.connect(str(self.db_path)) as conn:
+            with self._lock:
+                conn = self._connect()
                 cursor = conn.execute(
                     "SELECT value, timestamp FROM cache WHERE key = ?",
                     (key,)
@@ -83,7 +102,8 @@ class PersistentCache:
             value_str = json.dumps(value)
             timestamp = time.time()
             
-            with sqlite3.connect(str(self.db_path)) as conn:
+            with self._lock:
+                conn = self._connect()
                 conn.execute(
                     "INSERT OR REPLACE INTO cache (key, value, timestamp) VALUES (?, ?, ?)",
                     (key, value_str, timestamp)
@@ -95,7 +115,8 @@ class PersistentCache:
     def delete(self, key: str):
         """Delete specific key from cache."""
         try:
-            with sqlite3.connect(str(self.db_path)) as conn:
+            with self._lock:
+                conn = self._connect()
                 conn.execute("DELETE FROM cache WHERE key = ?", (key,))
                 conn.commit()
         except Exception as e:
@@ -104,7 +125,8 @@ class PersistentCache:
     def clear(self):
         """Clear all cache entries."""
         try:
-            with sqlite3.connect(str(self.db_path)) as conn:
+            with self._lock:
+                conn = self._connect()
                 conn.execute("DELETE FROM cache")
                 conn.commit()
             logger.info("Cache cleared")
@@ -115,7 +137,8 @@ class PersistentCache:
         """Remove all expired entries from cache."""
         try:
             cutoff_time = time.time() - self.ttl
-            with sqlite3.connect(str(self.db_path)) as conn:
+            with self._lock:
+                conn = self._connect()
                 cursor = conn.execute(
                     "DELETE FROM cache WHERE timestamp < ?",
                     (cutoff_time,)
@@ -130,7 +153,8 @@ class PersistentCache:
     def get_stats(self) -> dict:
         """Get cache statistics."""
         try:
-            with sqlite3.connect(str(self.db_path)) as conn:
+            with self._lock:
+                conn = self._connect()
                 cursor = conn.execute("SELECT COUNT(*) FROM cache")
                 total = cursor.fetchone()[0]
                 
@@ -160,6 +184,8 @@ def get_cache(ttl: int = DEFAULT_TTL, force_refresh: bool = False) -> Persistent
     global _global_cache
     
     if _global_cache is None or force_refresh:
+        if _global_cache is not None:
+            _global_cache.close()
         _global_cache = PersistentCache(ttl=ttl)
     
     return _global_cache
@@ -200,6 +226,8 @@ def cached_result(key_prefix: str = "", ttl: int = DEFAULT_TTL):
 def invalidate_cache():
     """Invalidate global cache instance."""
     global _global_cache
+    if _global_cache is not None:
+        _global_cache.close()
     _global_cache = None
     logger.info("Global cache invalidated")
 
@@ -209,11 +237,28 @@ class ProcessedFilesTracker:
 
     def __init__(self, db_path: Optional[Path] = None):
         self.db_path = db_path or CACHE_DB_PATH
+        self._lock = RLock()
+        self._conn: Optional[sqlite3.Connection] = None
         self._init_table()
 
+    def _connect(self) -> sqlite3.Connection:
+        """Return a process-local SQLite connection instead of reopening per operation."""
+        if self._conn is None:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._conn = sqlite3.connect(str(self.db_path), timeout=30)
+            self._conn.execute("PRAGMA busy_timeout = 30000")
+        return self._conn
+
+    def close(self) -> None:
+        """Close the persistent SQLite connection."""
+        with self._lock:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
+
     def _init_table(self):
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(str(self.db_path)) as conn:
+        with self._lock:
+            conn = self._connect()
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS processed_files (
                     filename TEXT PRIMARY KEY,
@@ -226,7 +271,8 @@ class ProcessedFilesTracker:
     def is_processed(self, filename: str) -> bool:
         """Return True if file was already successfully processed."""
         try:
-            with sqlite3.connect(str(self.db_path)) as conn:
+            with self._lock:
+                conn = self._connect()
                 cursor = conn.execute(
                     "SELECT 1 FROM processed_files WHERE filename = ? AND status = 'success'",
                     (filename,)
@@ -239,7 +285,8 @@ class ProcessedFilesTracker:
     def mark_processed(self, filename: str, status: str = "success"):
         """Mark file as processed with given status."""
         try:
-            with sqlite3.connect(str(self.db_path)) as conn:
+            with self._lock:
+                conn = self._connect()
                 conn.execute(
                     "INSERT OR REPLACE INTO processed_files (filename, status, processed_at) VALUES (?, ?, ?)",
                     (filename, status, time.time())
@@ -251,7 +298,8 @@ class ProcessedFilesTracker:
     def get_stats(self) -> dict:
         """Return counts by status."""
         try:
-            with sqlite3.connect(str(self.db_path)) as conn:
+            with self._lock:
+                conn = self._connect()
                 cursor = conn.execute(
                     "SELECT status, COUNT(*) FROM processed_files GROUP BY status"
                 )
@@ -263,7 +311,8 @@ class ProcessedFilesTracker:
     def reset(self):
         """Clear all records (use for full reprocess)."""
         try:
-            with sqlite3.connect(str(self.db_path)) as conn:
+            with self._lock:
+                conn = self._connect()
                 conn.execute("DELETE FROM processed_files")
                 conn.commit()
             logger.info("ProcessedFilesTracker reset: all records cleared")
@@ -280,6 +329,17 @@ def get_processed_tracker() -> "ProcessedFilesTracker":
     if _global_tracker is None:
         _global_tracker = ProcessedFilesTracker()
     return _global_tracker
+
+
+def close_global_connections() -> None:
+    """Close process-global SQLite connections."""
+    if _global_cache is not None:
+        _global_cache.close()
+    if _global_tracker is not None:
+        _global_tracker.close()
+
+
+atexit.register(close_global_connections)
 
 
 if __name__ == "__main__":

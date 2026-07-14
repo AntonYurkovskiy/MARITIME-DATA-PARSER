@@ -22,10 +22,13 @@ def add_seafarer(main:dict[str, Any])-> dict[str, Any]:
     payload.pop("photo", None)
 
     response = session.post(url, json=payload)
-    logger.debug("Response status: %s", response.status_code)
-    logger.debug("Response text: %s", response.text)
-    response.raise_for_status()
-    return response.json()
+    try:
+        logger.debug("Response status: %s", response.status_code)
+        logger.debug("Response text: %s", response.text)
+        response.raise_for_status()
+        return response.json()
+    finally:
+        response.close()
 
 
 def validate_photo_payload(photo: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -100,12 +103,13 @@ def send_photo_upload(
 ) -> Dict[str, Any]:
     """Отправляет запрос с фото и обрабатывает ответ."""
 
-    response = session.send(prepared, timeout=API_TIMEOUT)
-    logger.debug("Response status: %s", response.status_code)
-    logger.debug("Response text: %s", response.text)
-
+    response = None
     try:
+        response = session.send(prepared, timeout=API_TIMEOUT)
+        logger.debug("Response status: %s", response.status_code)
+        logger.debug("Response text: %s", response.text)
         response.raise_for_status()
+        return response.json()
     except requests.exceptions.HTTPError:
         logger.error(
             "upload_seafarer_photo failed: %s %s",
@@ -113,8 +117,9 @@ def send_photo_upload(
             response.text,
         )
         raise
-
-    return response.json()
+    finally:
+        if response is not None:
+            response.close()
 
 
 def upload_seafarer_photo(seafarer_uuid: str, photo: Dict[str, Any]) -> Dict[str, Any]:
