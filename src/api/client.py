@@ -46,6 +46,24 @@ def create_session_with_retries():
         return _original_request(method, url, **kwargs)
     session.request = _tracked_request
 
+    # Wrap send so every API call can recover once from an expired token.
+    _original_send = session.send
+    def _send_with_auth_refresh(request, **kwargs):
+        response = _original_send(request, **kwargs)
+        if response.status_code != 401 or _is_auth_login_request(request) or getattr(request, "_auth_retry", False):
+            return response
+
+        logger.warning("🔐 API returned 401 for %s %s; refreshing token and retrying once", request.method, request.url)
+        response.close()
+        setattr(request, "_auth_retry", True)
+        login_and_set_auth_headers(session)
+        if "Authorization" in session.headers:
+            request.headers["Authorization"] = session.headers["Authorization"]
+        if "Accept" in session.headers:
+            request.headers["Accept"] = session.headers["Accept"]
+        return _original_send(request, **kwargs)
+    session.send = _send_with_auth_refresh
+
     # Custom retry strategy with tracking
     class RetryWithStats(Retry):
         def __init__(self, *args, **kwargs):
@@ -65,6 +83,11 @@ def create_session_with_retries():
     session.mount("http://", adapter)
     session.mount("https://", adapter)
     return session
+
+
+def _is_auth_login_request(request: requests.PreparedRequest) -> bool:
+    """Return True for the login request itself to avoid recursive auth refresh."""
+    return str(request.url or "").rstrip("/") == f"{API_BASE_URL.rstrip('/')}/auth/login"
 
 
 def get_retry_stats() -> dict:
@@ -132,6 +155,7 @@ def login_and_set_auth_headers(session):
     session.headers.update({
         "Authorization": f"Bearer {token}",
         "Accept": "application/json",
+        "Connection": "close",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     })
 
@@ -140,6 +164,5 @@ def assert_token_present(token):
     """Проверяет наличие токена, выбрасывает ValueError при отсутствии."""
     if not token:
         raise ValueError("Нет access_token в ответе!")
-
 
 
