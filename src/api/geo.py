@@ -1,6 +1,8 @@
 # ПОИСК В ГЕОГРАФИЧЕСКИХ СЛОВАРЯХ
 from typing import Any, Callable, Dict, List, Optional
 import logging
+import json
+import re
 
 from src.api.client import _get_session
 from src.config import API_BASE_URL
@@ -9,6 +11,58 @@ from src.utils.validators import only_letters_regex
 from src.cache import get_cache, is_cache_enabled
 
 logger = logging.getLogger(__name__)
+
+MAX_CACHED_GEO_RESPONSE_BYTES = 200_000
+MIN_CACHED_AIRPORT_TERM_LEN = 4
+COMMON_AIRPORT_SEARCH_TERMS = {
+    "a",
+    "i",
+    "m",
+    "no",
+    "on",
+    "rk",
+    "sk",
+    "uk",
+    "km",
+    "ii",
+    "port",
+    "airport",
+    "aeroport",
+    "city",
+    "town",
+    "region",
+    "national",
+    "international",
+    "terminal",
+}
+
+
+def _normalize_cache_term(search_term: Optional[str]) -> str:
+    return re.sub(r"\s+", " ", str(search_term or "").strip().lower())
+
+
+def _should_use_geo_cache(search_term: Optional[str], geo_type: str) -> bool:
+    """Avoid persistent cache for broad airport terms that create huge result sets."""
+    term = _normalize_cache_term(search_term)
+    if not term:
+        return False
+    if geo_type == "airports":
+        if len(term) < MIN_CACHED_AIRPORT_TERM_LEN:
+            return False
+        if term in COMMON_AIRPORT_SEARCH_TERMS:
+            return False
+        if term.endswith(" airport"):
+            base_term = term.removesuffix(" airport").strip()
+            if len(base_term) < MIN_CACHED_AIRPORT_TERM_LEN or base_term in COMMON_AIRPORT_SEARCH_TERMS:
+                return False
+    return True
+
+
+def _is_geo_response_small_enough_to_cache(data: Any) -> bool:
+    try:
+        return len(json.dumps(data)) <= MAX_CACHED_GEO_RESPONSE_BYTES
+    except (TypeError, ValueError):
+        return False
 
 
 def search_geo(search_term: Optional[str], geo_type: str = "countries") -> Optional[List[Dict[str, Any]]]:
@@ -23,10 +77,12 @@ def search_geo(search_term: Optional[str], geo_type: str = "countries") -> Optio
     if not search_term:
         return None
 
+    use_cache = is_cache_enabled() and _should_use_geo_cache(search_term, geo_type)
+    cache_key = f"geo:{geo_type}:{search_term}"
+
     # Try to get from persistent cache first (unless cache disabled)
-    if is_cache_enabled():
+    if use_cache:
         cache = get_cache()
-        cache_key = f"geo:{geo_type}:{search_term}"
         cached_result = cache.get(cache_key)
         
         if cached_result is not None:
@@ -52,11 +108,12 @@ def search_geo(search_term: Optional[str], geo_type: str = "countries") -> Optio
             logger.info("✅ Найдено: %s записей", len(data))
             
             # Cache the result (unless cache disabled)
-            if is_cache_enabled():
+            if use_cache and _is_geo_response_small_enough_to_cache(data):
                 cache = get_cache()
-                cache_key = f"geo:{geo_type}:{search_term}"
                 cache.set(cache_key, data)
                 logger.debug(f"💾 Cached geo search: {search_term} ({geo_type})")
+            elif is_cache_enabled():
+                logger.debug("Skip geo cache for broad/large search: %s (%s)", search_term, geo_type)
             
             return data
 
